@@ -6,8 +6,8 @@ from scipy.spatial.transform import Rotation
 
 from crisp_py.robot import Robot
 from crisp_py.gripper.gripper import Gripper
-from crisp_py.devices.camera import Camera
-from crisp_py.envs.manipulator_env_config import ManipulatorEnvConfig, FrankaEnvConfig
+from crisp_py.camera.camera import Camera
+from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, FrankaEnvConfig
 
 class ManipulatorBaseEnv(gym.Env):
     """Base class for Manipulator Gym Environment.
@@ -19,6 +19,7 @@ class ManipulatorBaseEnv(gym.Env):
         """Initialize the Manipulator Gym Environment.
 
         Args:
+            namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
         super().__init__()

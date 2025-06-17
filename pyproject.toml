@@ -12,7 +12,7 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-crisp_py = { path = "../crisp_py", editable = true }
+crisp-py = { path = "../crisp_py", editable = true }
 
 [tool.ruff]
 exclude = [

@@ -3031,7 +3031,7 @@ packages:
 - pypi: ./
   name: crisp-gym
   version: 0.1.0
-  sha256: e1e140360a6c0f1a3087d1a049a049ea7ce4104dcbbafb397259114130529d62
+  sha256: abd9d79d81616c7234def916bc9754e202aba64944a59c8b40cec7aac2033338
   requires_dist:
   - ruff>=0.11.9
   - gymnasium>=0.26.3,<2
@@ -3042,11 +3042,9 @@ packages:
 - pypi: ../crisp_py
   name: crisp-py
   version: 0.1.0
-  sha256: 89afbb006b3f844fceb8ef289f66234168b561ac774838b340b1f067383300e0
+  sha256: f79652bd6bda8a390b7dceb4f734666cb579bc5ba96c2bfa7a0fa5f5de039126
   requires_dist:
   - ruff>=0.11.9
-  - gymnasium>=0.26.3,<2
-  - scipy>=1.15.2,<2
   requires_python: '>=3.11'
   editable: true
 - conda: https://conda.anaconda.org/conda-forge/linux-64/cryptography-45.0.4-py311hafd3f86_0.conda

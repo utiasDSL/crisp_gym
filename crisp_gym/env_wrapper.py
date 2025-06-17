@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 from typing import Tuple
 
-from crisp_py.envs.manipulator_env import ManipulatorBaseEnv
+from crisp_gym.manipulator_env import ManipulatorBaseEnv
 
 def stack_gym_space(space: gym.Space, repeat: int):
     """Repeat a Gym space definition."""
