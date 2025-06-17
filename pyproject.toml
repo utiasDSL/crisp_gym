@@ -1,0 +1,66 @@
+[project]
+name = "crisp-gym"
+version = "0.1.0"
+description = "Simple gymnasium environments for crisp_py"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "ruff>=0.11.9",
+    "gymnasium>=0.26.3,<2",
+    "scipy>=1.15.2,<2",
+    "crisp-py"
+]
+
+[tool.uv.sources]
+crisp_py = { path = "../crisp_py", editable = true }
+
+[tool.ruff]
+exclude = [
+    ".git",
+    ".git-rewrite",
+    ".ipynb_checkpoints",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "build",
+    "dist",
+    "site-packages",
+    "venv",
+]
+
+line-length = 100
+indent-width = 4
+target-version = "py311"
+
+[build-system]
+requires = ["setuptools>=61.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+exclude = ["config"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "D", "TCH", "ANN"]
+ignore = ["ANN401", "ANN101"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-annotations]
+suppress-dummy-args = true
+suppress-none-returning = true
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = true
+line-ending = "auto"
+docstring-code-format = true
+docstring-code-line-length = "dynamic"
