@@ -74,10 +74,15 @@ class ManipulatorBaseEnv(gym.Env):
         )
 
     def _get_obs(self) -> dict:
-        """Get the current observation from the robot.
+        """
+        Retrieve the current observation from the robot.
 
         Returns:
-            dict: Current observation.
+            dict: A dictionary containing the current sensor and state information, including:
+                - '{camera_name}_image': RGB image from each configured camera.
+                - 'joint': Current joint configuration of the robot in radians.
+                - 'cartesian': End-effector pose as a 6D vector (position [xyz] + orientation in Euler angles [xyz], in radians).
+                - 'gripper': Normalized gripper state (0 = fully open, 1 = fully closed).
         """
         obs = {}
         for camera in self.cameras:
@@ -91,12 +96,23 @@ class ManipulatorBaseEnv(gym.Env):
         return obs
     
     def _set_gripper_action(self, action: float):
-        if action >= self.config.gripper_threshold and self.gripper.is_open():
+        """
+        Execute the gripper action.
+        Args:
+            action (float): Action value for the gripper (0,1).
+        """
+
+        if action >= self.config.gripper_threshold and self.gripper.is_open(open_threshold=self.config.gripper_threshold):
             self.gripper.close()
-        elif action < self.config.gripper_threshold and not self.gripper.is_open():
+        elif action < self.config.gripper_threshold and not self.gripper.is_open(open_threshold=self.config.gripper_threshold):
             self.gripper.open()
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
+        """
+        Step the environment.
+        Returns truncated flag if max_episode_steps is reached.
+        """
+
         obs = {}
         reward = 0.0
         terminated = False
@@ -124,6 +140,11 @@ class ManipulatorBaseEnv(gym.Env):
         super().close()
 
     def switch_controller(self, ctrl_type: str):
+        """Switch the controller type.
+        Args:
+            ctrl_type (str): Type of controller to switch to ('joint' or 'cartesian').
+        """
+
         ctrl_types = {'joint': 'joint_impedance_controller', 'cartesian': 'cartesian_impedance_controller'}
 
         if ctrl_type not in ctrl_types:
@@ -135,6 +156,12 @@ class ManipulatorBaseEnv(gym.Env):
         self.robot.controller_switcher_client.switch_controller(ctrl_types[self.ctrl_type])
 
     def home(self, home_config: list[float] | None = None, blocking: bool = True):
+        """Move the robot to the home position.
+        Args:
+            home_config (list[float]): Optional home configuration for the robot.
+            blocking (bool): If True, wait until the robot reaches the home position.
+        """
+
         current_ctrl_type = self.ctrl_type
 
         self.gripper.open()
@@ -144,6 +171,12 @@ class ManipulatorBaseEnv(gym.Env):
         self.switch_controller(current_ctrl_type)
 
     def move_to(self, position: iter = None, pose: iter = None, speed: float = 0.05):
+        """Move the robot to a specified position or pose.
+        Args:
+            position (iter): Optional position to move to [x, y, z].
+            pose (iter): Optional pose (translation and rotation) to move to.
+            speed (float): Speed of the movement.
+        """
 
         current_ctrl_type = self.ctrl_type
 
@@ -170,6 +203,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         """Initialize the Manipulator Cartesian Environment.
 
         Args:
+            namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
         super().__init__(namespace, config)
@@ -193,7 +227,14 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.switch_controller("cartesian")
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
-
+        """Step the environment with a Cartesian action.
+        Args:
+            action (np.ndarray): Cartesian delta action [dx, dy, dz, roll, pitch, yaw, gripper_action].
+            block (bool): If True, block to maintain the control rate.
+        Returns:
+            Tuple[dict, float, bool, bool, dict]: Observation, reward, terminated flag, truncated flag, and info dictionary.
+        """
+        
         assert action.shape == self.action_space.shape, f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         #assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
@@ -231,6 +272,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         """Initialize the Manipulator Joint Environment.
 
         Args:
+            namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
         super().__init__(namespace, config)
@@ -250,6 +292,15 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.switch_controller("joint")
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
+        """Step the environment with a Joint action.
+        Args:
+            action (np.ndarray): Joint delta action [dtheta1, dtheta2, ..., dtheta7, gripper_action].
+            block (bool): If True, block to maintain the control rate.
+        Returns:
+            Tuple[dict, float, bool, bool, dict]: Observation, reward, terminated flag, truncated flag, and info dictionary.
+        """
+
+        obs = {}
         reward = 0.0
         terminated = False
         truncated = False

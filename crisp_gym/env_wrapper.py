@@ -52,6 +52,9 @@ class WindowWrapper(gym.Wrapper):
         return getattr(self.env, name)
     
 class RecedingHorizon(gym.Wrapper):
+    """
+    A Gym wrapper that takes a sequence of actions and applies them in a receding horizon manner.
+    """
     def __init__(self, env: ManipulatorBaseEnv, horizon_length: int):
         super().__init__(env)
 

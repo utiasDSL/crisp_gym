@@ -63,3 +63,5 @@ class FrankaEnvConfig(ManipulatorEnvConfig):
             ),
         ]
     )
+
+    max_episode_steps: int = 1000
