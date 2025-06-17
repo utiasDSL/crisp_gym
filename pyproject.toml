@@ -8,11 +8,9 @@ dependencies = [
     "ruff>=0.11.9",
     "gymnasium>=0.26.3,<2",
     "scipy>=1.15.2,<2",
-    "crisp-py"
+    "crisp_py @ file:///${PROJECT_ROOT}/../crisp_py"
 ]
 
-[tool.uv.sources]
-crisp-py = { path = "../crisp_py", editable = true }
 
 [tool.ruff]
 exclude = [
