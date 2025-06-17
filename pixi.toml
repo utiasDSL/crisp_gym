@@ -27,7 +27,6 @@ cmake = "*"
 pkg-config = "*"
 make = "*"
 ninja = "*"
-pinocchio = ">=3.5.0,<4"
 
 [target.linux.dependencies]
 libgl-devel = "*"

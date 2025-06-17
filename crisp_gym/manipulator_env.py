@@ -1,10 +1,9 @@
 import gymnasium as gym
 import numpy as np
-import pinocchio as pin
 from typing import Optional, Tuple
 from scipy.spatial.transform import Rotation
 
-from crisp_py.robot import Robot
+from crisp_py.robot import Robot, Pose
 from crisp_py.gripper.gripper import Gripper
 from crisp_py.camera.camera import Camera
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, FrankaEnvConfig
@@ -88,10 +87,7 @@ class ManipulatorBaseEnv(gym.Env):
         for camera in self.cameras:
             obs[f'{camera.config.camera_name}_image'] = camera.current_image
         obs["joint"] = self.robot.joint_values
-
-        eef_pose = np.array(self.robot.end_effector_pose)
-        obs["cartesian"] = np.concatenate((eef_pose[:3, 3], Rotation.from_matrix(eef_pose[:3, :3]).as_euler('xyz')))
-
+        obs["cartesian"] = np.concatenate((self.robot.end_effector_pose.position, self.robot.end_effector_pose.orientation.as_euler('xyz')), axis=0)
         obs["gripper"] = 1 - np.array([self.gripper.value])
         return obs
     
@@ -183,7 +179,7 @@ class ManipulatorBaseEnv(gym.Env):
         self.switch_controller('cartesian')
         
         if pose:
-            pose = pin.SE3(quat=pin.Quaternion(Rotation.from_euler('xyz', np.array(pose)).as_quat()), translation=np.array(position))
+            pose = Pose(position = np.array(position), orientation = Rotation.from_euler('xyz', np.array(pose)))
             position = None
 
         self.gripper.open()
@@ -234,21 +230,17 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         Returns:
             Tuple[dict, float, bool, bool, dict]: Observation, reward, terminated flag, truncated flag, and info dictionary.
         """
-        
+
         assert action.shape == self.action_space.shape, f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         #assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
-        target_pose = self.robot.target_pose
-
-        quat = pin.Quaternion(target_pose.rotation)
-        current_position, current_orientation = target_pose.translation, Rotation.from_quat([quat.x, quat.y, quat.z, quat.w] )
         translation, rotation = action[:3], Rotation.from_euler('xyz', action[3:6])
 
-        target_position = current_position + translation
+        target_position = self.robot.target_pose.position + translation
         target_position[2] = max(target_position[2], self._min_z_height)
-        target_orientation = rotation * current_orientation
+        target_orientation = rotation * self.robot.target_pose.orientation
 
-        target_pose = pin.SE3(quat=pin.Quaternion(target_orientation.as_quat()), translation=target_position)
+        target_pose = Pose(position=target_position, orientation=target_orientation)
         self.robot.set_target(pose=target_pose)
 
         self._set_gripper_action(action[6])
