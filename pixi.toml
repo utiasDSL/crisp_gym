@@ -22,11 +22,12 @@ libgl-devel = "*"
 
 [environments]
 dev = { features = ["dev"] }
-# humble = { features = ["humble"] }
-# jazzy = { features = ["jazzy"] }
+humble = { features = ["humble"] }
+jazzy = { features = ["jazzy"] }
 
 [feature.dev.pypi-dependencies]
 pre-commit = "*"
+ruff = "*"
 
 # humble
 [feature.humble]

@@ -1,6 +1,7 @@
 """Control the joints using the ManipulatorJointEnv interactively."""
 
 import numpy as np
+
 from crisp_gym.manipulator_env import ManipulatorJointEnv
 from crisp_gym.manipulator_env_config import FrankaEnvConfig
 
@@ -47,8 +48,6 @@ while True:
     except KeyboardInterrupt:
         print("\nInterrupted. Exiting joint control.")
         break
-
-
 
 
 print("Returning to home position...")

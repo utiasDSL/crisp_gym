@@ -1,6 +1,7 @@
 """Draw a circle using the ManipulatorCartesianEnv."""
 
 import numpy as np
+
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
 from crisp_gym.manipulator_env_config import FrankaEnvConfig
 
@@ -93,4 +94,3 @@ print("Going back home.")
 env.home()
 
 env.close()
-
