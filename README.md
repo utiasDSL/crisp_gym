@@ -6,3 +6,5 @@
 <a href="https://github.com/utiasDSL/crisp_gym/actions/workflows/pixi_ci.yml"><img src="https://github.com/utiasDSL/crisp_gym/actions/workflows/pixi_ci.yml/badge.svg"/></a>
 
 This repository contains all environments for to train policies using the *crisp_gym* as a backbone.
+
+The installation steps are similar to [crisp_py](https://github.com/utiasDSL/crisp_py/tree/feat-ruff-check?tab=readme-ov-file#git-installation-with-pixi) installation.
