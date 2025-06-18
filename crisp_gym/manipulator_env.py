@@ -1,16 +1,21 @@
+"""General manipulator environments."""
+
+from typing import Any, List, Optional, Tuple
+
 import gymnasium as gym
 import numpy as np
-from typing import Optional, Tuple
+from crisp_py.camera import Camera
+from crisp_py.gripper import Gripper
+from crisp_py.robot import Pose, Robot
+from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 
-from crisp_py.robot import Robot, Pose
-from crisp_py.gripper.gripper import Gripper
-from crisp_py.camera.camera import Camera
-from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, FrankaEnvConfig
+from crisp_gym.manipulator_env_config import FrankaEnvConfig, ManipulatorEnvConfig
 
 
 class ManipulatorBaseEnv(gym.Env):
     """Base class for Manipulator Gym Environment.
+
     This class serves as a base for creating specific Manipulator Gym environments.
     It cannot be used directly.
     """
@@ -71,8 +76,7 @@ class ManipulatorBaseEnv(gym.Env):
         )
 
     def _get_obs(self) -> dict:
-        """
-        Retrieve the current observation from the robot.
+        """Retrieve the current observation from the robot.
 
         Returns:
             dict: A dictionary containing the current sensor and state information, including:
@@ -96,12 +100,11 @@ class ManipulatorBaseEnv(gym.Env):
         return obs
 
     def _set_gripper_action(self, action: float):
-        """
-        Execute the gripper action.
+        """Execute the gripper action.
+
         Args:
             action (float): Action value for the gripper (0,1).
         """
-
         if action >= self.config.gripper_threshold and self.gripper.is_open(
             open_threshold=self.config.gripper_threshold
         ):
@@ -112,11 +115,10 @@ class ManipulatorBaseEnv(gym.Env):
             self.gripper.open()
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
-        """
-        Step the environment.
+        """Step the environment.
+
         Returns truncated flag if max_episode_steps is reached.
         """
-
         obs = {}
         reward = 0.0
         terminated = False
@@ -130,9 +132,11 @@ class ManipulatorBaseEnv(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
-    def reset(self) -> Tuple[dict, dict]:
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[dict, dict]:
         """Reset the environment."""
-        super().reset()
+        super().reset(seed=seed, options=options)
 
         self.timestep = 0
 
@@ -145,10 +149,10 @@ class ManipulatorBaseEnv(gym.Env):
 
     def switch_controller(self, ctrl_type: str):
         """Switch the controller type.
+
         Args:
             ctrl_type (str): Type of controller to switch to ('joint' or 'cartesian').
         """
-
         ctrl_types = {
             "joint": "joint_impedance_controller",
             "cartesian": "cartesian_impedance_controller",
@@ -164,27 +168,37 @@ class ManipulatorBaseEnv(gym.Env):
 
     def home(self, home_config: list[float] | None = None, blocking: bool = True):
         """Move the robot to the home position.
+
         Args:
             home_config (list[float]): Optional home configuration for the robot.
             blocking (bool): If True, wait until the robot reaches the home position.
         """
-
         current_ctrl_type = self.ctrl_type
+        if current_ctrl_type is None:
+            raise ValueError(
+                "Control type should be set in the configuration file of the environment."
+            )
 
         self.gripper.open()
         self.robot.home(home_config, blocking)
 
         self.switch_controller(current_ctrl_type)
 
-    def move_to(self, position: iter = None, pose: iter = None, speed: float = 0.05):
+    def move_to(
+        self, position: List | NDArray | None = None, pose: Pose | None = None, speed: float = 0.05
+    ):
         """Move the robot to a specified position or pose.
+
         Args:
             position (iter): Optional position to move to [x, y, z].
             pose (iter): Optional pose (translation and rotation) to move to.
             speed (float): Speed of the movement.
         """
-
         current_ctrl_type = self.ctrl_type
+        if current_ctrl_type is None:
+            raise ValueError(
+                "Control type should be set in the configuration file of the environment."
+            )
 
         self.switch_controller("cartesian")
 
@@ -243,13 +257,14 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
+
         Args:
             action (np.ndarray): Cartesian delta action [dx, dy, dz, roll, pitch, yaw, gripper_action].
             block (bool): If True, block to maintain the control rate.
+
         Returns:
             Tuple[dict, float, bool, bool, dict]: Observation, reward, terminated flag, truncated flag, and info dictionary.
         """
-
         assert action.shape == self.action_space.shape, (
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
@@ -305,13 +320,14 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
+
         Args:
             action (np.ndarray): Joint delta action [dtheta1, dtheta2, ..., dtheta7, gripper_action].
             block (bool): If True, block to maintain the control rate.
+
         Returns:
             Tuple[dict, float, bool, bool, dict]: Observation, reward, terminated flag, truncated flag, and info dictionary.
         """
-
         obs = {}
         reward = 0.0
         terminated = False
