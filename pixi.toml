@@ -6,17 +6,6 @@ name = "crisp_gym"
 platforms = ["linux-64"]
 version = "0.1.0"
 
-[package]
-name = "crisp_gym"
-version = "0.1.0"
-
-[package.build]
-backend = { name = "pixi-build-python", version = "0.1.*" }
-channels = [
-  "https://prefix.dev/pixi-build-backends",
-  "https://prefix.dev/conda-forge",
-]
-
 [activation]
 scripts = ["scripts/set_cyclone.sh"]
 
@@ -32,8 +21,12 @@ ninja = "*"
 libgl-devel = "*"
 
 [environments]
-humble = { features = ["humble"] }
-jazzy = { features = ["jazzy"] }
+dev = { features = ["dev"] }
+# humble = { features = ["humble"] }
+# jazzy = { features = ["jazzy"] }
+
+[feature.dev.pypi-dependencies]
+pre-commit = "*"
 
 # humble
 [feature.humble]
@@ -61,3 +54,4 @@ rosdep = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
+crisp_py = { path = "../crisp_py", editable = true }  # TODO: Move to pyproject.toml when available in pypi

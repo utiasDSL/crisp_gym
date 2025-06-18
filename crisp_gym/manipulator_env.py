@@ -8,6 +8,7 @@ from crisp_py.gripper.gripper import Gripper
 from crisp_py.camera.camera import Camera
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, FrankaEnvConfig
 
+
 class ManipulatorBaseEnv(gym.Env):
     """Base class for Manipulator Gym Environment.
     This class serves as a base for creating specific Manipulator Gym environments.
@@ -25,13 +26,10 @@ class ManipulatorBaseEnv(gym.Env):
         self.config = config if config else FrankaEnvConfig()
 
         self.robot = Robot(namespace=namespace, robot_config=self.config.robot_config)
-        self.gripper = Gripper(namespace=namespace, 
-                               gripper_config=self.config.gripper_config,
-                               )
+        self.gripper = Gripper(namespace=namespace, gripper_config=self.config.gripper_config)
         self.cameras = [
-            Camera(namespace=namespace, 
-                   config=camera_config, 
-                   ) for camera_config in self.config.camera_configs
+            Camera(namespace=namespace, config=camera_config)
+            for camera_config in self.config.camera_configs
         ]
 
         self.timestep = 0
@@ -47,7 +45,7 @@ class ManipulatorBaseEnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 **{
-                    f'{camera.config.camera_name}_image': gym.spaces.Box(
+                    f"{camera.config.camera_name}_image": gym.spaces.Box(
                         low=np.zeros((*camera.config.resolution, 3), dtype=np.uint8),
                         high=255 * np.ones((*camera.config.resolution, 3), dtype=np.uint8),
                         dtype=np.uint8,
@@ -55,19 +53,19 @@ class ManipulatorBaseEnv(gym.Env):
                     for camera in self.cameras
                 },
                 "joint": gym.spaces.Box(
-                    low=np.ones((7, ), dtype=np.float32) * -np.pi,
-                    high=np.ones((7, ), dtype=np.float32) * np.pi,
-                    dtype=np.float32
+                    low=np.ones((7,), dtype=np.float32) * -np.pi,
+                    high=np.ones((7,), dtype=np.float32) * np.pi,
+                    dtype=np.float32,
                 ),
                 "cartesian": gym.spaces.Box(
-                    low=-np.ones((6, ), dtype=np.float32),
-                    high=np.ones((6, ), dtype=np.float32),
-                    dtype=np.float32
+                    low=-np.ones((6,), dtype=np.float32),
+                    high=np.ones((6,), dtype=np.float32),
+                    dtype=np.float32,
                 ),
                 "gripper": gym.spaces.Box(
-                    low=np.zeros((1, ), dtype=np.float32),
-                    high=np.ones((1, ), dtype=np.float32),
-                    dtype=np.float32
+                    low=np.zeros((1,), dtype=np.float32),
+                    high=np.ones((1,), dtype=np.float32),
+                    dtype=np.float32,
                 ),
             }
         )
@@ -85,12 +83,18 @@ class ManipulatorBaseEnv(gym.Env):
         """
         obs = {}
         for camera in self.cameras:
-            obs[f'{camera.config.camera_name}_image'] = camera.current_image
+            obs[f"{camera.config.camera_name}_image"] = camera.current_image
         obs["joint"] = self.robot.joint_values
-        obs["cartesian"] = np.concatenate((self.robot.end_effector_pose.position, self.robot.end_effector_pose.orientation.as_euler('xyz')), axis=0)
+        obs["cartesian"] = np.concatenate(
+            (
+                self.robot.end_effector_pose.position,
+                self.robot.end_effector_pose.orientation.as_euler("xyz"),
+            ),
+            axis=0,
+        )
         obs["gripper"] = 1 - np.array([self.gripper.value])
         return obs
-    
+
     def _set_gripper_action(self, action: float):
         """
         Execute the gripper action.
@@ -98,9 +102,13 @@ class ManipulatorBaseEnv(gym.Env):
             action (float): Action value for the gripper (0,1).
         """
 
-        if action >= self.config.gripper_threshold and self.gripper.is_open(open_threshold=self.config.gripper_threshold):
+        if action >= self.config.gripper_threshold and self.gripper.is_open(
+            open_threshold=self.config.gripper_threshold
+        ):
             self.gripper.close()
-        elif action < self.config.gripper_threshold and not self.gripper.is_open(open_threshold=self.config.gripper_threshold):
+        elif action < self.config.gripper_threshold and not self.gripper.is_open(
+            open_threshold=self.config.gripper_threshold
+        ):
             self.gripper.open()
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
@@ -121,7 +129,7 @@ class ManipulatorBaseEnv(gym.Env):
         self.timestep += 1
 
         return obs, reward, terminated, truncated, info
-    
+
     def reset(self) -> Tuple[dict, dict]:
         """Reset the environment."""
         super().reset()
@@ -141,13 +149,16 @@ class ManipulatorBaseEnv(gym.Env):
             ctrl_type (str): Type of controller to switch to ('joint' or 'cartesian').
         """
 
-        ctrl_types = {'joint': 'joint_impedance_controller', 'cartesian': 'cartesian_impedance_controller'}
+        ctrl_types = {
+            "joint": "joint_impedance_controller",
+            "cartesian": "cartesian_impedance_controller",
+        }
 
         if ctrl_type not in ctrl_types:
-            print(f'Controller {ctrl_type} not availabe.')
+            print(f"Controller {ctrl_type} not availabe.")
 
-            return 
-        
+            return
+
         self.ctrl_type = ctrl_type
         self.robot.controller_switcher_client.switch_controller(ctrl_types[self.ctrl_type])
 
@@ -162,7 +173,6 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.gripper.open()
         self.robot.home(home_config, blocking)
-        
 
         self.switch_controller(current_ctrl_type)
 
@@ -176,10 +186,12 @@ class ManipulatorBaseEnv(gym.Env):
 
         current_ctrl_type = self.ctrl_type
 
-        self.switch_controller('cartesian')
-        
+        self.switch_controller("cartesian")
+
         if pose:
-            pose = Pose(position = np.array(position), orientation = Rotation.from_euler('xyz', np.array(pose)))
+            pose = Pose(
+                position=np.array(position), orientation=Rotation.from_euler("xyz", np.array(pose))
+            )
             position = None
 
         self.gripper.open()
@@ -195,6 +207,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
     This class is a specific implementation of the Manipulator Gym Environment for Cartesian space control.
     """
+
     def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None):
         """Initialize the Manipulator Cartesian Environment.
 
@@ -207,17 +220,23 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self._min_z_height = 0.0
 
         self.action_space = gym.spaces.Box(
-            low=np.concatenate([
-                -np.ones((3, ), dtype=np.float32),
-                -np.ones((3, ), dtype=np.float32) * np.pi,
-                np.zeros((1, ), dtype=np.float32)
-            ], axis=0),
-            high=np.concatenate([
-                np.ones((3, ), dtype=np.float32),
-                np.ones((3, ), dtype=np.float32) * np.pi,
-                np.ones((1, ), dtype=np.float32)
-            ], axis=0),
-            dtype=np.float32
+            low=np.concatenate(
+                [
+                    -np.ones((3,), dtype=np.float32),
+                    -np.ones((3,), dtype=np.float32) * np.pi,
+                    np.zeros((1,), dtype=np.float32),
+                ],
+                axis=0,
+            ),
+            high=np.concatenate(
+                [
+                    np.ones((3,), dtype=np.float32),
+                    np.ones((3,), dtype=np.float32) * np.pi,
+                    np.ones((1,), dtype=np.float32),
+                ],
+                axis=0,
+            ),
+            dtype=np.float32,
         )
 
         self.switch_controller("cartesian")
@@ -231,10 +250,12 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             Tuple[dict, float, bool, bool, dict]: Observation, reward, terminated flag, truncated flag, and info dictionary.
         """
 
-        assert action.shape == self.action_space.shape, f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
-        #assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
+        assert action.shape == self.action_space.shape, (
+            f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
+        )
+        # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
-        translation, rotation = action[:3], Rotation.from_euler('xyz', action[3:6])
+        translation, rotation = action[:3], Rotation.from_euler("xyz", action[3:6])
 
         target_position = self.robot.target_pose.position + translation
         target_position[2] = max(target_position[2], self._min_z_height)
@@ -254,6 +275,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         return obs, reward, terminated, truncated, info
 
+
 class ManipulatorJointEnv(ManipulatorBaseEnv):
     """Manipulator Joint Environment.
 
@@ -270,15 +292,13 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         super().__init__(namespace, config)
 
         self.action_space = gym.spaces.Box(
-            low=np.concatenate([
-                np.ones((7, ), dtype=np.float32) * -np.pi,
-                np.zeros((1, ), dtype=np.float32)
-            ], axis=0),
-            high=np.concatenate([
-                np.ones((7, ), dtype=np.float32) * np.pi,
-                np.ones((1, ), dtype=np.float32)
-            ], axis=0),
-            dtype=np.float32
+            low=np.concatenate(
+                [np.ones((7,), dtype=np.float32) * -np.pi, np.zeros((1,), dtype=np.float32)], axis=0
+            ),
+            high=np.concatenate(
+                [np.ones((7,), dtype=np.float32) * np.pi, np.ones((1,), dtype=np.float32)], axis=0
+            ),
+            dtype=np.float32,
         )
 
         self.switch_controller("joint")
@@ -298,8 +318,10 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         truncated = False
         info = {}
 
-        assert action.shape == self.action_space.shape, f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
-        #assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
+        assert action.shape == self.action_space.shape, (
+            f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
+        )
+        # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
         target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
 
@@ -315,4 +337,3 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         obs = self._get_obs()
 
         return obs, reward, terminated, truncated, info
-
