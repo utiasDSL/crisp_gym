@@ -44,7 +44,7 @@ exclude = ["config"]
 
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F", "I", "D", "TCH", "ANN"]
-ignore = ["ANN401", "ANN101"]
+ignore = ["ANN401"]
 fixable = ["ALL"]
 unfixable = []
 
@@ -58,7 +58,6 @@ suppress-none-returning = true
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
-skip-magic-trailing-comma = true
 line-ending = "auto"
 docstring-code-format = true
 docstring-code-line-length = "dynamic"

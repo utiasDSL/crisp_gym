@@ -1,15 +1,17 @@
 """Draw a circle using the ManipulatorCartesianEnv with the RecedingHorizon and WindowWrapper."""
+
 import numpy as np
+
+from crisp_gym.env_wrapper import RecedingHorizon, WindowWrapper
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
 from crisp_gym.manipulator_env_config import FrankaEnvConfig
-from crisp_gym.env_wrapper import RecedingHorizon, WindowWrapper
 
 # === Circle Parameters ===
 RADIUS = 0.1  # [m]
 CENTER = np.array([0.4, 0.0, 0.4])
-CTRL_FREQ = 50      # control frequency in Hz
-SIN_FREQ = 0.25     # frequency of circular motion in Hz
-ITERATIONS = 5      # number of full circles to draw
+CTRL_FREQ = 50  # control frequency in Hz
+SIN_FREQ = 0.25  # frequency of circular motion in Hz
+ITERATIONS = 5  # number of full circles to draw
 
 # === Environment Settings ===
 ACTION_HORIZON = 5
