@@ -23,13 +23,21 @@ libgl-devel = "*"
 [environments]
 dev = { features = ["dev"] }
 humble = { features = ["humble"] }
+humble-lerobot = { features = ["humble", "lerobot"] }
 jazzy = { features = ["jazzy"] }
 
 [feature.dev.pypi-dependencies]
 pre-commit = "*"
 ruff = "*"
 
-# humble
+[feature.lerobot.pypi-dependencies]
+lerobot = { path = "../lerobot", editable = false }  
+rich = ">=14.0.0, <15"
+
+
+[feature.lerobot.dependencies]
+pynput = "*"
+
 [feature.humble]
 channels = ["https://prefix.dev/robostack-humble"]
 
@@ -42,7 +50,6 @@ ros-humble-rmw-zenoh-cpp = "*"
 rosdep = "*"
 ros-humble-rmw-cyclonedds-cpp = "*"
 
-# jazzy
 [feature.jazzy]
 channels = ["https://prefix.dev/robostack-jazzy"]
 
@@ -55,4 +62,4 @@ rosdep = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-crisp_py = { path = "../crisp_py", editable = true }  # TODO: Move to pyproject.toml when available in pypi
+crisp_py = { path = "../crisp_py", editable = false }  # TODO: Move to pyproject.toml when available in pypi
