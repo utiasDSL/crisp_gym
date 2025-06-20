@@ -31,9 +31,8 @@ pre-commit = "*"
 ruff = "*"
 
 [feature.lerobot.pypi-dependencies]
-lerobot = { path = "../lerobot", editable = false }  
+lerobot = { path = "../lerobot", editable = false }
 rich = ">=14.0.0, <15"
-
 
 [feature.lerobot.dependencies]
 pynput = "*"

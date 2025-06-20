@@ -82,13 +82,12 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/7e/e8/64c37fadfc2816a7701fa8a6ed8d87327c7d54eacfbfb6edab14a2f2be75/cloudpickle-3.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/05/2c/ffc08c54c05cdce6fbed2aeebc46348dbe180c6d2c541c7af7ba0aa5f5f8/Farama_Notifications-0.0.4-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f9/68/2bdc7b46b5f543dd865575f9d19716866bdb76e50dd33b71ed1a3dd8bb42/gymnasium-1.1.1-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/1c/12/734dce1087eed1875f2297f687e671cfe53a091b6f2f55f0c7241aad041b/numpy-2.3.0-cp313-cp313-manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/2c/8b/90eb44a40476fa0e71e05a0283947cfd74a5d36121a11d926ad6f3193cc4/opencv_python-4.11.0.86-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/19/49/4df9123aafa7b539317bf6d342cb6d227e49f7a35b99c287a6109b13dd93/numpy-2.2.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/db/c3/82b292ff8a561850934549aa9dc39e2c4e783ab3c21debe55a495ddf7827/ruff-0.12.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/b5/09/c5b6734a50ad4882432b6bb7c02baf757f5b2f256041da5df242e2d7e6b6/scipy-1.15.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/69/e0/552843e0d356fbb5256d21449fa957fa4eff3bbc135a74a691ee70c7c5da/typing_extensions-4.14.0-py3-none-any.whl
+      - pypi: .
       - pypi: ../crisp_py
-      - pypi: ./
   dev:
     channels:
     - url: https://fast.prefix.dev/conda-forge/
@@ -176,8 +175,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f9/68/2bdc7b46b5f543dd865575f9d19716866bdb76e50dd33b71ed1a3dd8bb42/gymnasium-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/7a/cd/18f8da995b658420625f7ef13f037be53ae04ec5ad33f9b718240dcfd48c/identify-2.6.12-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d2/1d/1b658dbd2b9fa9c4c9f32accbfc0205d532c8c6194dc0f2a4c0428e7128a/nodeenv-1.9.1-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/1c/12/734dce1087eed1875f2297f687e671cfe53a091b6f2f55f0c7241aad041b/numpy-2.3.0-cp313-cp313-manylinux_2_28_x86_64.whl
-      - pypi: https://files.pythonhosted.org/packages/2c/8b/90eb44a40476fa0e71e05a0283947cfd74a5d36121a11d926ad6f3193cc4/opencv_python-4.11.0.86-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: https://files.pythonhosted.org/packages/19/49/4df9123aafa7b539317bf6d342cb6d227e49f7a35b99c287a6109b13dd93/numpy-2.2.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/fe/39/979e8e21520d4e47a0bbe349e2713c0aac6f3d853d0e5b34d76206c439aa/platformdirs-4.3.8-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/88/74/a88bf1b1efeae488a0c0b7bdf71429c313722d1fc0f377537fbe554e6180/pre_commit-4.2.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/04/24/b7721e4845c2f162d26f50521b825fb061bc0a5afcf9a386840f23ea19fa/PyYAML-6.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
@@ -185,8 +183,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/b5/09/c5b6734a50ad4882432b6bb7c02baf757f5b2f256041da5df242e2d7e6b6/scipy-1.15.3-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/69/e0/552843e0d356fbb5256d21449fa957fa4eff3bbc135a74a691ee70c7c5da/typing_extensions-4.14.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f3/40/b1c265d4b2b62b58576588510fc4d1fe60a86319c8de99fd8e9fec617d2c/virtualenv-20.31.2-py3-none-any.whl
+      - pypi: .
       - pypi: ../crisp_py
-      - pypi: ./
   humble:
     channels:
     - url: https://prefix.dev/robostack-humble/
@@ -944,8 +942,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f9/68/2bdc7b46b5f543dd865575f9d19716866bdb76e50dd33b71ed1a3dd8bb42/gymnasium-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/db/c3/82b292ff8a561850934549aa9dc39e2c4e783ab3c21debe55a495ddf7827/ruff-0.12.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/bd/37/89f19c8c05505d0601ed5650156e50eb881ae3918786c8fd7262b4ee66d3/scipy-1.15.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: .
       - pypi: ../crisp_py
-      - pypi: ./
   humble-lerobot:
     channels:
     - url: https://prefix.dev/robostack-humble/
@@ -1766,9 +1764,9 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a7/c2/fe1e52489ae3122415c51f387e221dd0773709bad6c6cdaa599e8a2c5185/urllib3-2.5.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/fd/84/fd2ba7aafacbad3c4201d395674fc6348826569da3c0937e75505ead3528/wcwidth-0.2.13-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/d9/72/9256303f10e41ab004799a4aa74b80b3c5977d6383ae4550548b24bd1971/xxhash-3.5.0-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: .
       - pypi: ../crisp_py
       - pypi: ../lerobot
-      - pypi: ./
   jazzy:
     channels:
     - url: https://prefix.dev/robostack-jazzy/
@@ -2576,8 +2574,8 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f9/68/2bdc7b46b5f543dd865575f9d19716866bdb76e50dd33b71ed1a3dd8bb42/gymnasium-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/db/c3/82b292ff8a561850934549aa9dc39e2c4e783ab3c21debe55a495ddf7827/ruff-0.12.0-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/0b/1f/03f52c282437a168ee2c7c14a1a0d0781a9a4a8962d84ac05c06b4c5b555/scipy-1.15.3-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+      - pypi: .
       - pypi: ../crisp_py
-      - pypi: ./
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/_libgcc_mutex-0.1-conda_forge.tar.bz2
   sha256: fe51de6107f9edc7aa4f786a70f4a883943bc9d39b3bb7307c04c41410990726
@@ -2668,7 +2666,7 @@ packages:
   license: MIT AND Apache-2.0
   license_family: Apache
   purls:
-  - pkg:pypi/aiohttp?source=compressed-mapping
+  - pkg:pypi/aiohttp?source=hash-mapping
   size: 1003765
   timestamp: 1749715063811
 - conda: https://conda.anaconda.org/conda-forge/noarch/aiosignal-1.3.2-pyhd8ed1ab_0.conda
@@ -3624,7 +3622,7 @@ packages:
   - pkg:pypi/cppcheck-htmlreport?source=hash-mapping
   size: 2886675
   timestamp: 1744040683266
-- pypi: ./
+- pypi: .
   name: crisp-gym
   version: 0.1.0
   sha256: 12fdc5ab03bb04dd2d9641678166bc55d7e292c13243e595ce3563ac75f51fdd
@@ -3637,12 +3635,10 @@ packages:
 - pypi: ../crisp_py
   name: crisp-py
   version: 1.0.12
-  sha256: 5b13c6ee3c14c4ec6426fe7bb63eae52def681b13a78b4adffcd7b1d3d570944
+  sha256: dc75c2fc7cc8b6446035e7a5630ee753c206be8e18118b81841a36919deb2c56
   requires_dist:
-  - ruff>=0.11.9
-  - opencv-python>=4.10.0
   - scipy
-  - numpy
+  - numpy<2.3
   requires_python: '>=3.11'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/cryptography-45.0.4-py311hafd3f86_0.conda
   sha256: 0832d1aff2f6606824a89aed2427da26bda9914b6d2ff34ec643f560f4560547
@@ -8836,11 +8832,11 @@ packages:
   - llvmlite>=0.44.0.dev0,<0.45
   - numpy>=1.24,<2.3
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/1c/12/734dce1087eed1875f2297f687e671cfe53a091b6f2f55f0c7241aad041b/numpy-2.3.0-cp313-cp313-manylinux_2_28_x86_64.whl
+- pypi: https://files.pythonhosted.org/packages/19/49/4df9123aafa7b539317bf6d342cb6d227e49f7a35b99c287a6109b13dd93/numpy-2.2.6-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
   name: numpy
-  version: 2.3.0
-  sha256: 87717eb24d4a8a64683b7a4e91ace04e2f5c7c77872f823f02a94feee186168f
-  requires_python: '>=3.11'
+  version: 2.2.6
+  sha256: 1bc23a79bfabc5d056d106f9befb8d50c31ced2fbc70eedb8155aec74a45798f
+  requires_python: '>=3.10'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/numpy-1.26.4-py311h64a7726_0.conda
   sha256: 3f4365e11b28e244c95ba8579942b0802761ba7bb31c026f50d1a9ea9c728149
   md5: a502d7aad449a1206efb366d6a12c52d
@@ -8985,22 +8981,6 @@ packages:
   purls: []
   size: 55357
   timestamp: 1749853464518
-- pypi: https://files.pythonhosted.org/packages/2c/8b/90eb44a40476fa0e71e05a0283947cfd74a5d36121a11d926ad6f3193cc4/opencv_python-4.11.0.86-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
-  name: opencv-python
-  version: 4.11.0.86
-  sha256: 6b02611523803495003bd87362db3e1d2a0454a6a63025dc6658a9830570aa0d
-  requires_dist:
-  - numpy>=1.13.3 ; python_full_version < '3.7'
-  - numpy>=1.21.0 ; python_full_version < '3.10' and platform_machine == 'arm64' and sys_platform == 'darwin'
-  - numpy>=1.21.2 ; python_full_version >= '3.10'
-  - numpy>=1.21.4 ; python_full_version >= '3.10' and sys_platform == 'darwin'
-  - numpy>=1.23.5 ; python_full_version >= '3.11'
-  - numpy>=1.26.0 ; python_full_version >= '3.12'
-  - numpy>=1.19.3 ; python_full_version >= '3.6' and platform_machine == 'aarch64' and sys_platform == 'linux'
-  - numpy>=1.17.0 ; python_full_version >= '3.7'
-  - numpy>=1.17.3 ; python_full_version >= '3.8'
-  - numpy>=1.19.3 ; python_full_version >= '3.9'
-  requires_python: '>=3.6'
 - conda: https://conda.anaconda.org/conda-forge/linux-64/openexr-3.3.4-h2cd1444_0.conda
   sha256: 91f2d6bee02f1ad876f2d2f7e4cd00993b77513b460b395672bde04c7ef3e7fb
   md5: e10f915be2fee16e00d314ae406c983b
