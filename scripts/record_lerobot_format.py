@@ -5,9 +5,15 @@ import time
 from pathlib import Path
 from typing import Literal, Optional
 
+import numpy as np
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
 from lerobot.common.datasets.utils import build_dataset_frame
 from pynput import keyboard
+
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.manipulator_env_config import NoCamFrankaEnvConfig
+
+# %%
 
 
 class RecordingManager:
@@ -63,13 +69,15 @@ class RecordingManager:
         """Return true if we are not done recording."""
         return self.episode_count < self._num_episodes and not self.state == "exit"
 
-    def __enter__(self) -> "RecordingManager":
+    def __enter__(self) -> "RecordingManager":  # noqa: D105
         self.listener.start()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001, D105
         self.listener.stop()
 
+
+# %%
 
 # Configuration
 cameras = {
@@ -105,6 +113,8 @@ features["action"] = {
 obs_dict = {dim: 0.0 for dim in cartesian_dims}
 action_dict = {dim: 0.0 for dim in cartesian_dims}
 
+# %%
+
 
 def create_dataset() -> LeRobotDataset:
     """Create a new dataset instance.
@@ -125,13 +135,13 @@ def create_dataset() -> LeRobotDataset:
     )
 
 
-def record_step(env, dataset):
-    """Record step."""
-    action_frame = build_dataset_frame(features, action_dict, prefix="action")
-    obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
-    frame = {**obs_frame, **action_frame}
-    dataset.add_frame(frame, task=single_task)
-    time.sleep(1 / fps)
+# %%
+
+env_config = NoCamFrankaEnvConfig()
+env = ManipulatorCartesianEnv(config=env_config)
+print(env._get_obs())
+
+# %%
 
 
 def record_episodes(num_episodes: int = 3) -> None:
@@ -151,7 +161,20 @@ def record_episodes(num_episodes: int = 3) -> None:
 
             print("Started episode")
             while recording_manager.state == "recording":
-                record_step(env=None, dataset=dataset)
+                obs = env._get_obs()
+                action, _, _, _, _ = env.step(np.array([0.0] * 7))
+
+                action_dict = {dim: action[i] for i, dim in enumerate(cartesian_dims)}
+                obs_dict = {
+                    dim: obs["cartesian"][i] if i < 6 else obs["gripper"]
+                    for i, dim in enumerate(cartesian_dims)
+                }
+
+                action_frame = build_dataset_frame(features, action_dict, prefix="action")
+                obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
+                frame = {**obs_frame, **action_frame}
+                dataset.add_frame(frame, task=single_task)
+                # time.sleep(1 / fps)
 
             if recording_manager.state == "paused":
                 print("Waiting for user to decide whether to save or delete the episode")
