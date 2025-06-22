@@ -10,12 +10,14 @@ version = "0.1.0"
 scripts = ["scripts/set_cyclone.sh"]
 
 [dependencies]
-python = "*"
+python = "3.11.*"
 compilers = "*"
 cmake = "*"
 pkg-config = "*"
 make = "*"
 ninja = "*"
+typing_inspect = ">=0.9.0,<0.10"
+libstdcxx-ng = ">=12.2.0"
 
 [target.linux.dependencies]
 libgl-devel = "*"
@@ -24,6 +26,7 @@ libgl-devel = "*"
 dev = { features = ["dev"] }
 humble = { features = ["humble"] }
 humble-lerobot = { features = ["humble", "lerobot"] }
+lerobot = { features = ["lerobot"] }
 jazzy = { features = ["jazzy"] }
 
 [feature.dev.pypi-dependencies]
@@ -45,7 +48,6 @@ ros-humble-desktop = "*"
 colcon-common-extensions = "*"
 ros-humble-ros2-control = "*"
 ros-humble-ros2-controllers = "*"
-ros-humble-rmw-zenoh-cpp = "*"
 rosdep = "*"
 ros-humble-rmw-cyclonedds-cpp = "*"
 

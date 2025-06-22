@@ -19,8 +19,9 @@ def get_features(env: ManipulatorBaseEnv) -> Dict[str, Dict]:
         # TODO: cmaera feature
         # camera_key_map = {"third_person_image": "primary", "wrist_image": "wrist"}
         features[f"observation.images.{cam.config.camera_name}"] = {
-            "dtype": "float32",
-            "shape": cam.config.resolution,
+            "dtype": "image",
+            "shape": (*cam.config.resolution, 3),
+            "names": ["height", "width", "channels"],
         }
 
     # joint_dims = [f"joint_{idx}" for idx in range(7)] + ["gripper"]

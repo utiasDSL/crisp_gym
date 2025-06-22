@@ -96,3 +96,40 @@ class NoCamFrankaEnvConfig(ManipulatorEnvConfig):
     camera_configs: List[CameraConfig] = field(default_factory=lambda: [])
 
     max_episode_steps: int | None = 1000
+
+
+@dataclass
+class OnlyWristCamFrankaEnvConfig(ManipulatorEnvConfig):
+    """Franka Gym Environment Configuration."""
+
+    control_frequency: float = 10.0
+
+    gripper_threshold: float = 0.1
+    gripper_enabled: bool = False
+
+    robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
+
+    gripper_config: GripperConfig = field(
+        default_factory=lambda: GripperConfig(
+            min_value=0,
+            max_value=1,
+            command_topic="gripper/gripper_position_controller/commands",
+            joint_state_topic="gripper/joint_states",
+            reboot_service="gripper/reboot_gripper",
+            enable_torque_service="gripper/dynamixel_hardware_interface/set_dxl_torque",
+        )
+    )
+
+    camera_configs: List[CameraConfig] = field(
+        default_factory=lambda: [
+            CameraConfig(
+                camera_name="camera",
+                camera_frame="wrist_link",
+                resolution=(256, 256),
+                camera_color_image_topic="camera/wrist_camera/color/image_rect_raw",
+                camera_color_info_topic="camera/wrist_camera/color/camera_info",
+            ),
+        ]
+    )
+
+    max_episode_steps: int | None = 1000
