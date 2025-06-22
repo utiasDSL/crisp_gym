@@ -41,7 +41,8 @@ class ManipulatorBaseEnv(gym.Env):
         self.ctrl_type = None
 
         self.robot.wait_until_ready(timeout=3)
-        self.gripper.wait_until_ready(timeout=3)
+        if self.config.gripper_enabled:
+            self.gripper.wait_until_ready(timeout=3)
         for camera in self.cameras:
             camera.wait_until_ready(timeout=3)
 
@@ -96,7 +97,7 @@ class ManipulatorBaseEnv(gym.Env):
             ),
             axis=0,
         )
-        obs["gripper"] = 1 - np.array([self.gripper.value])
+        obs["gripper"] = 1 - np.array([self.gripper.value]) if self.config.gripper_enabled else 0.0
         return obs
 
     def _set_gripper_action(self, action: float):
@@ -179,7 +180,8 @@ class ManipulatorBaseEnv(gym.Env):
                 "Control type should be set in the configuration file of the environment."
             )
 
-        self.gripper.open()
+        if self.config.gripper_enabled:
+            self.gripper.open()
         self.robot.home(home_config, blocking)
 
         self.switch_controller(current_ctrl_type)
@@ -208,7 +210,8 @@ class ManipulatorBaseEnv(gym.Env):
             )
             position = None
 
-        self.gripper.open()
+        if self.config.gripper_enabled:
+            self.gripper.open()
         self.robot.move_to(position=position, pose=pose, speed=speed)
 
         self.robot.reset_targets()
@@ -279,7 +282,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         target_pose = Pose(position=target_position, orientation=target_orientation)
         self.robot.set_target(pose=target_pose)
 
-        self._set_gripper_action(action[6])
+        if self.config.gripper_enabled:
+            self._set_gripper_action(action[6])
 
         if block:
             self.control_rate.sleep()
@@ -343,7 +347,8 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
 
         self.robot.set_target_joint(target_joint)
 
-        self._set_gripper_action(action[7])
+        if self.config.gripper_enabled:
+            self._set_gripper_action(action[7])
 
         if block:
             self.control_rate.sleep()
