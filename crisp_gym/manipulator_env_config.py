@@ -18,11 +18,12 @@ class ManipulatorEnvConfig:
 
     control_frequency: float
 
-    gripper_threshold: float
-
     robot_config: RobotConfig
     gripper_config: GripperConfig
     camera_configs: List[CameraConfig]
+
+    gripper_enabled: bool = True
+    gripper_threshold: float = 0.1
 
     max_episode_steps: int | None = None
 
@@ -77,6 +78,7 @@ class NoCamFrankaEnvConfig(ManipulatorEnvConfig):
     control_frequency: float = 10.0
 
     gripper_threshold: float = 0.1
+    gripper_enabled: bool = False
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
