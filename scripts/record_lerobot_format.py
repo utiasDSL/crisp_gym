@@ -1,9 +1,9 @@
 """Script showcasing how to record data in Lerobot Format."""
 
 import argparse
-from pathlib import Path
 import shutil
 import time
+from pathlib import Path
 
 import numpy as np
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
@@ -12,26 +12,21 @@ from rich import print
 
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import NoCamFrankaEnvConfig
+from crisp_gym.manipulator_env_config import OnlyWristCamFrankaEnvConfig
 from crisp_gym.record.recording_manager import RecordingManager
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
-    parser.add_argument("--repo-id", type=str, default="franka_single",
-                      help="Repository ID for the dataset")
-    parser.add_argument("--task", type=str, default="pick the lego block.",
-                      help="Task description")
-    parser.add_argument("--robot-type", type=str, default="franka",
-                      help="Type of robot being used")
-    parser.add_argument("--fps", type=int, default=30,
-                      help="Frames per second for recording")
-    parser.add_argument("--max-duration", type=float, default=30.0,
-                      help="Maximum episode duration in seconds")
-    parser.add_argument("--num-episodes", type=int, default=3,
-                      help="Number of episodes to record")
-    return parser.parse_args()
-
-args = parse_args()
+parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
+parser.add_argument(
+    "--repo-id", type=str, default="franka_single", help="Repository ID for the dataset"
+)
+parser.add_argument("--task", type=str, default="pick the lego block.", help="Task description")
+parser.add_argument("--robot-type", type=str, default="franka", help="Type of robot being used")
+parser.add_argument("--fps", type=int, default=30, help="Frames per second for recording")
+parser.add_argument(
+    "--max-duration", type=float, default=30.0, help="Maximum episode duration in seconds"
+)
+parser.add_argument("--num-episodes", type=int, default=3, help="Number of episodes to record")
+args = parser.parse_args()
 
 repo_id = args.repo_id
 single_task = args.task
@@ -44,7 +39,8 @@ num_episodes = args.num_episodes
 if Path(HF_LEROBOT_HOME / repo_id).exists():
     shutil.rmtree(HF_LEROBOT_HOME / repo_id)
 
-env_config = NoCamFrankaEnvConfig()
+# env_config = NoCamFrankaEnvConfig()
+env_config = OnlyWristCamFrankaEnvConfig()
 env = ManipulatorCartesianEnv(config=env_config)
 features = get_features(env)
 
@@ -57,6 +53,7 @@ dataset = LeRobotDataset.create(
 )
 
 env.reset()
+env.robot.controller_switcher_client.switch_controller("gravity_compensation")
 
 # %%
 
@@ -92,10 +89,16 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 dim: obs_pre_step["cartesian"][i] if i < 6 else obs_pre_step["gripper"]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
-
+            cam_frame = {
+                f"observation.images.{camera.config.camera_name}": obs_pre_step[
+                    f"{camera.config.camera_name}_image"
+                ]
+                for camera in env.cameras
+            }
             action_frame = build_dataset_frame(features, action_dict, prefix="action")
             obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
-            frame = {**obs_frame, **action_frame}
+
+            frame = {**obs_frame, **action_frame, **cam_frame}
             dataset.add_frame(frame, task=single_task)
             # time.sleep(1 / fps)
 
