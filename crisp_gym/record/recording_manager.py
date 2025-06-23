@@ -1,6 +1,6 @@
 """Keyboard event listener for controlling episode recording."""
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pynput import keyboard
 from rich import print
