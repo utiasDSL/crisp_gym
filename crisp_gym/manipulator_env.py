@@ -1,6 +1,8 @@
 """General manipulator environments."""
-
+import os
+import time
 from typing import Any, List, Optional, Tuple
+from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -44,6 +46,23 @@ class ManipulatorBaseEnv(gym.Env):
         self.gripper.wait_until_ready(timeout=3)
         for camera in self.cameras:
             camera.wait_until_ready(timeout=3)
+
+        if self.config.cartesian_control_param_config:
+            if not os.path.exists(self.config.cartesian_control_param_config):
+                raise FileNotFoundError(
+                    f"Cartesian control parameter config file not found: {self.config.cartesian_control_param_config}"
+                )
+            self.robot.cartesian_controller_parameters_client.load_param_config(
+                file_path=self.config.cartesian_control_param_config
+            )
+        if self.config.joint_control_param_config:
+            if not os.path.exists(self.config.joint_control_param_config):
+                raise FileNotFoundError(
+                    f"Joint control parameter config file not found: {self.config.joint_control_param_config}"
+                )
+            self.robot.joint_controller_parameters_client.load_param_config(
+                file_path=self.config.joint_control_param_config
+            )
 
         self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
 
@@ -297,7 +316,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     This class is a specific implementation of the Manipulator Gym Environment for Joint space control.
     """
 
-    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None):
+    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None, control_config_path: Optional[Path] = None):
         """Initialize the Manipulator Joint Environment.
 
         Args:
@@ -339,7 +358,8 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         )
         # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
-        target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
+        #target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
+        target_joint = self.robot.target_joint + action[:7]
 
         self.robot.set_target_joint(target_joint)
 

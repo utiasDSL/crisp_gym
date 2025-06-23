@@ -1,7 +1,8 @@
 """General manipulator environment configs."""
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
+from pathlib import Path
 
 from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
@@ -24,6 +25,9 @@ class ManipulatorEnvConfig:
     gripper_config: GripperConfig
     camera_configs: List[CameraConfig]
 
+    cartesian_control_param_config: Optional[Path] = None
+    joint_control_param_config: Optional[Path] = None
+
     max_episode_steps: int | None = None
 
 
@@ -33,7 +37,7 @@ class FrankaEnvConfig(ManipulatorEnvConfig):
 
     control_frequency: float = 10.0
 
-    gripper_threshold: float = 0.05
+    gripper_threshold: float = 0.1
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
@@ -65,6 +69,13 @@ class FrankaEnvConfig(ManipulatorEnvConfig):
                 camera_color_info_topic="right_wrist_camera/color/camera_info",
             ),
         ]
+    )
+
+    cartesian_control_param_config: Optional[Path] = field(
+        default_factory=lambda: Path("/home/maxi/crisp_gym/config/control/cartesian_impedance_controller.yaml")
+    )
+    joint_control_param_config: Optional[Path] = field(
+        default_factory=lambda: Path("/home/maxi/crisp_gym/config/control/joint_impedance_controller.yaml")
     )
 
     max_episode_steps: int | None = 1000
