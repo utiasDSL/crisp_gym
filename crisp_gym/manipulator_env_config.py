@@ -1,8 +1,8 @@
 """General manipulator environment configs."""
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 from pathlib import Path
+from typing import List, Optional
 
 from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
