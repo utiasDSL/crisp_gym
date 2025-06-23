@@ -1,8 +1,6 @@
 """General manipulator environments."""
 import os
-import time
 from typing import Any, List, Optional, Tuple
-from pathlib import Path
 
 import gymnasium as gym
 import numpy as np
@@ -316,7 +314,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     This class is a specific implementation of the Manipulator Gym Environment for Joint space control.
     """
 
-    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None, control_config_path: Optional[Path] = None):
+    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None):
         """Initialize the Manipulator Joint Environment.
 
         Args:
