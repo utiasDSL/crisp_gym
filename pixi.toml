@@ -62,5 +62,5 @@ colcon-common-extensions = "*"
 rosdep = "*"
 
 [pypi-dependencies]
-crisp_gym = { path = ".", editable = true }
+crisp_gym = { path = ".", editable = false }
 crisp_py = { path = "../crisp_py", editable = false }  # TODO: Move to pyproject.toml when available in pypi

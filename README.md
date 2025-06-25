@@ -14,7 +14,7 @@ In particular, if you work on a multi-machine setup, you should check how to set
 
 ## Recording Datasets
 
-You can record datasets in `LeRobotDataset` format by running `python scripts/record_lerobot_dataset.py`. 
+You can record datasets in `LeRobotDataset` format by running `python scripts/record_lerobot_dataset.py`.
 Check the available options with `-h` to modify the metadata of the dataset created.
 You can interactively save episodes using the keyboard to save or delete failed episodes.
 For now the data-collection works with:
@@ -22,7 +22,7 @@ For now the data-collection works with:
 - [ ]  In a dual arm setup with follower and leader,
 - [ ]  Using a motion tracking system like vicon.
 
-It is important to note, that to record a dataset in `lerobot` format, you need to install lerobot. 
+It is important to note, that to record a dataset in `lerobot` format, you need to install lerobot.
 Lerobot has a lot of dependencies and makes it really hard to install it in your system without breaking some previous config.
 [This fork of lerobot](https://github.com/danielsanjosepro/lerobot) has only the dependencies needed to create datasets (which is still quite a lot).
 
