@@ -73,16 +73,20 @@ camera_config_tp.camera_color_image_topic = "right_third_person_camera/color/ima
 camera_config_tp.camera_color_info_topic = "right_third_person_camera/color/camera_info"
 
 # Gripper 
-gripper_config_follower = GripperConfig(min_value = 0.0, max_value = 1.0 )
-gripper_config_follower.command_topic = "gripper/gripper_position_controller/commands"
-gripper_config_follower.joint_state_topic = "gripper/joint_states"
-
+gripper_config_follower = GripperConfig(
+    min_value=0.0,
+    max_value=1.0,
+    command_topic="gripper/gripper_position_controller/commands",
+    joint_state_topic="gripper/joint_states"
+)
 
 # Gripper config for leader
-gripper_config_leader = GripperConfig(min_value = 0.0, max_value = 1.0)
-gripper_config_leader.command_topic = "gripper/gripper_position_controller/commands"
-gripper_config_leader.joint_state_topic = "gripper/joint_states"
-
+gripper_config_leader = GripperConfig(
+    min_value = 0.0, 
+    max_value = 1.0,
+    command_topic = "gripper/gripper_position_controller/commands",
+    joint_state_topic = "gripper/joint_states"
+)
 
 # Follower
 env_config = FrankaEnvConfig(camera_configs=[camera_config_wrist, camera_config_tp], gripper_config=gripper_config_follower)
@@ -124,13 +128,14 @@ start_time = -1
 
 
 # %%
-def sync(leader, env):  # noqa: D103, ANN001
+def sync(leader, env, leader_gripper):
     env.robot.set_target(pose=leader.end_effector_pose)
-    env.gripper.set_target(leader_gripper.value)
+    if leader_gripper.value is not None:
+        env.gripper.set_target(leader_gripper.value)
     
 
 leader.node.create_timer(
-    1.0 / faster_publishing_config.publish_frequency, lambda: sync(leader, env)
+    1.0 / faster_publishing_config.publish_frequency, lambda: sync(leader, env, leader_gripper)
 )
 
 with RecordingManager(num_episodes=num_episodes) as recording_manager:
@@ -161,7 +166,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             action = np.concatenate(
                 (
                     obs_after_step["cartesian"] - obs_pre_step["cartesian"],
-                    np.array([obs_after_step["gripper"]]),
+                    np.array([obs_after_step["gripper"][0]])- np.array([obs_pre_step["gripper"][0]]),
                 ),
                 axis=0,
             )
@@ -171,6 +176,10 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 dim: obs_pre_step["cartesian"][i] if i < 6 else obs_pre_step["gripper"]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
+            # The 'gripper' key in teh dictonary is a numpy array but should be converted to a float
+            if "gripper" in obs_dict:
+                obs_dict["gripper"] = float(obs_dict["gripper"])
+
             cam_frame = {
                 f"observation.images.{camera.config.camera_name}": obs_pre_step[
                     f"{camera.config.camera_name}_image"
