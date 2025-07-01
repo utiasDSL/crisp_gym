@@ -1,29 +1,19 @@
-"""
-Implementation for smooth debugging 
-"""
-import os
-import pathlib
-# Set ROS environment variables
-# Get the script's directory and workspace root
-script_dir = pathlib.Path(__file__).parent.resolve()
-workspace_root = script_dir.parent.parent
-os.environ['ROS_DOMAIN_ID'] = '100'
-os.environ['RMW_IMPLEMENTATION'] = 'rmw_cyclonedds_cpp'
-os.environ['CYCLONEDDS_URI'] = f"file://{script_dir / 'cyclone_config.xml'}"
-
 """Script showcasing how to record data in Lerobot Format."""
 
 import argparse  # noqa: I001
+import os
+import pathlib
 import shutil
 import time
 from pathlib import Path
-import PIL.Image  # noqa: F401
 
+import numpy as np
+import PIL.Image  # noqa: F401
+from crisp_py.camera import FrankaCameraConfig
+from crisp_py.gripper import GripperConfig
+from crisp_py.gripper.gripper import Gripper
 from crisp_py.robot import Robot
 from crisp_py.robot_config import FrankaConfig
-
-from crisp_py.camera import FrankaCameraConfig
-import numpy as np
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
 from lerobot.common.datasets.utils import build_dataset_frame
 from rich import print
@@ -31,10 +21,16 @@ from rich import print
 import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import OnlyWristCamFrankaEnvConfig, FrankaEnvConfig
+from crisp_gym.manipulator_env_config import FrankaEnvConfig
 from crisp_gym.record.recording_manager import RecordingManager
-from crisp_py.gripper import GripperConfig
-from crisp_py.gripper.gripper import Gripper 
+
+# Set ROS environment variables
+# Get the script's directory and workspace root
+script_dir = pathlib.Path(__file__).parent.resolve()
+workspace_root = script_dir.parent.parent
+os.environ['ROS_DOMAIN_ID'] = '100'
+os.environ['RMW_IMPLEMENTATION'] = 'rmw_cyclonedds_cpp'
+os.environ['CYCLONEDDS_URI'] = f"file://{script_dir / 'cyclone_config.xml'}"
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -128,7 +124,7 @@ start_time = -1
 
 
 # %%
-def sync(leader, env, leader_gripper):
+def sync(leader, env, leader_gripper):  # noqa: ANN001, D103
     env.robot.set_target(pose=leader.end_effector_pose)
     if leader_gripper.value is not None:
         env.gripper.set_target(leader_gripper.value)
