@@ -34,7 +34,7 @@ class FrankaEnvConfig(ManipulatorEnvConfig):
 
     control_frequency: float = 10.0
 
-    gripper_threshold: float = 0.1
+    gripper_threshold: float = 0.05
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
