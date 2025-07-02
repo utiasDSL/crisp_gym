@@ -6,11 +6,9 @@ import time
 from pathlib import Path
 import PIL.Image  # noqa: F401
 
-from crisp_py.robot import Robot
-from crisp_py.robot_config import FrankaConfig
-import numpy as np
 
 from crisp_py.camera import FrankaCameraConfig
+import numpy as np
 from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
 from lerobot.common.datasets.utils import build_dataset_frame
 from rich import print
@@ -31,7 +29,7 @@ parser.add_argument("--fps", type=int, default=30, help="Frames per second for r
 parser.add_argument(
     "--max-duration", type=float, default=30.0, help="Maximum episode duration in seconds"
 )
-parser.add_argument("--num-episodes", type=int, default=1, help="Number of episodes to record")
+parser.add_argument("--num-episodes", type=int, default=3, help="Number of episodes to record")
 args = parser.parse_args()
 
 repo_id = args.repo_id
@@ -52,13 +50,9 @@ camera_config.camera_color_image_topic = "right_wrist_camera/color/image_rect_ra
 camera_config.camera_color_info_topic = "right_wrist_camera/color/camera_info"
 
 env_config = OnlyWristCamFrankaEnvConfig(camera_configs=[camera_config])
+# env_config = NoCamFrankaEnvConfig()
 env = ManipulatorCartesianEnv(namespace="right", config=env_config)
 features = get_features(env)
-
-# Leader
-faster_publishing_config = FrankaConfig()
-faster_publishing_config.publish_frequency = 200.0
-leader = Robot(robot_config=faster_publishing_config, namespace="left")
 
 dataset = LeRobotDataset.create(
     repo_id=repo_id,
@@ -72,24 +66,7 @@ env.home()
 env.reset()
 env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
-leader.wait_until_ready()
-leader.cartesian_controller_parameters_client.load_param_config(
-    file_path="../crisp_py/config/control/gravity_compensation.yaml"
-)
-leader.home()
-leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
-
 start_time = -1
-
-
-# %%
-def sync(leader, env):  # noqa: D103, ANN001
-    env.robot.set_target(pose=leader.end_effector_pose)
-
-
-leader.node.create_timer(
-    1.0 / faster_publishing_config.publish_frequency, lambda: sync(leader, env)
-)
 
 with RecordingManager(num_episodes=num_episodes) as recording_manager:
     while not recording_manager == "exit":
@@ -108,13 +85,16 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             # NOTE: This might look wrong but while doing kinesthetic teaching, the action is the reached
             # state after steping. This is the position where the operator moved the robot arm to.
             obs_pre_step = env._get_obs()
-            obs_after_step, _, _, _, _ = env.step(np.array([0.0] * 7))
+            # obs_after_step, _, _, _, _ = env.step(np.array([0.0] * 7))
+            action = np.array([0.0] * 7)
+            action[2] = -1e-3
+            obs_after_step, _, _, _, _ = env.step(action)
 
             # Investigate timestamps:
-            if start_time == -1:
-                start_time = time.time()
-            print("Actual time is: ", time.time() - start_time)
-            print("Step time is: ", env.step * fps)
+            # if start_time == -1:
+            #     start_time = time.time()
+            # print("Actual time is: ", time.time() - start_time)
+            # print("Step time is: ", env.step * fps)
 
             action = np.concatenate(
                 (
@@ -147,8 +127,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 "[blue] Stopped episode. Waiting for user to decide whether to save or delete the episode"
             )
             # Reset funcionality to reset the robot and environment
-            leader.home()
-            leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+
             env.home()
             env.reset()
             start_time = -1
@@ -168,9 +147,6 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
 
         if recording_manager.state == "exit":
             break
-
-leader.home()
-leader.shutdown()
 
 env.home()
 env.close()
