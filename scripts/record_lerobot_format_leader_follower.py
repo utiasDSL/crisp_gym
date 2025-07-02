@@ -100,16 +100,12 @@ env.robot.controller_switcher_client.switch_controller("cartesian_impedance_cont
 
 leader.wait_until_ready()
 leader.cartesian_controller_parameters_client.load_param_config(
-    file_path="../crisp_py/config/control/gravity_compensation.yaml"
+    file_path="../crisp_py/config/control/gravity_compensation_on_plane.yaml"
 )
 leader.home()
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
 # %% Start interaction
-
-start_time = -1
-step = 0
-# duration = 30  # seconds
 
 previous_pose = leader.end_effector_pose
 with RecordingManager(num_episodes=num_episodes) as recording_manager:
@@ -128,8 +124,20 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
         start_time = time.time()
         step = 0
         obs = {}
+
+        # HACK: be sure that this one is running. Maybe the controller failed during recording so we need
+        # to set the parameters again.
+        # Reset before starting
+        env.reset()
+        env.robot.reset_targets()
+        leader.reset_targets()
+        leader.cartesian_controller_parameters_client.load_param_config(
+            file_path="../crisp_py/config/control/gravity_compensation_on_plane.yaml"
+        )
+        leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+        env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+
         while recording_manager.state == "recording":
-            # Investigate timestamps:
             step_time_init = time.time()
 
             if step == 0:
@@ -155,6 +163,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 sleep_time = 1 / 30.0 - (time.time() - step_time_init)
                 if sleep_time > 0:
                     time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+                step += 1
                 continue
 
             # print("Actual time is: ", time.time() - start_time)
@@ -184,7 +193,6 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
-            # print(obs_dict)
             cam_frame = {
                 f"observation.images.{camera.config.camera_name}": obs[
                     f"{camera.config.camera_name}_image"
@@ -203,18 +211,16 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
 
+            step += 1
+
         if recording_manager.state == "paused":
             print(
                 "[blue] Stopped episode. Waiting for user to decide whether to save or delete the episode"
             )
-            # Reset funcionality to reset the robot and environment
-            leader.home()
-            leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
-            env.home()
-            env.reset()
-            start_time = -1
-            previous_pose = leader.end_effector_pose
-            step = 0
+            # Start homing for both robots
+            leader.home(blocking=False)
+            env.robot.home(blocking=False)
+
         while recording_manager.state == "paused":
             time.sleep(1.0)
 
