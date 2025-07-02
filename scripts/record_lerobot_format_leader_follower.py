@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 import PIL.Image  # noqa: F401
 
+from crisp_py.gripper import Gripper, GripperConfig
 from crisp_py.robot import Robot
 from crisp_py.robot_config import FrankaConfig
 import numpy as np
@@ -18,7 +19,7 @@ from rich import print
 import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import OnlyWristCamFrankaEnvConfig
+from crisp_gym.manipulator_env_config import FrankaEnvConfig
 from crisp_gym.record.recording_manager import RecordingManager
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
@@ -45,20 +46,29 @@ num_episodes = args.num_episodes
 if Path(HF_LEROBOT_HOME / repo_id).exists():
     shutil.rmtree(HF_LEROBOT_HOME / repo_id)
 
-# Follower
-camera_config = FrankaCameraConfig()
-camera_config.camera_name = "right_wrist_camera"
-camera_config.camera_color_image_topic = "right_wrist_camera/color/image_rect_raw"
-camera_config.camera_color_info_topic = "right_wrist_camera/color/camera_info"
+# Wrist camera
+camera_config_wrist = FrankaCameraConfig()
+camera_config_wrist.camera_name = "right_wrist_camera"
+camera_config_wrist.camera_color_image_topic = "right_wrist_camera/color/image_rect_raw"
+camera_config_wrist.camera_color_info_topic = "right_wrist_camera/color/camera_info"
 
-env_config = OnlyWristCamFrankaEnvConfig(camera_configs=[camera_config])
+# Tp camera
+camera_config_tp = FrankaCameraConfig()
+camera_config_tp.camera_name = "right_third_person_camera"
+camera_config_tp.camera_color_image_topic = "right_third_person_camera/color/image_raw"
+camera_config_tp.camera_color_info_topic = "right_third_person_camera/color/camera_info"
+
+env_config = FrankaEnvConfig(camera_configs=[camera_config_wrist, camera_config_tp])
+env_config.gripper_enabled = True
+
+path = Path("../crisp_py/config/gripper_right.yaml").resolve()
+env_config.gripper_config = GripperConfig.from_yaml(path=path)
+env_config.gripper_config.joint_state_topic = "gripper/gripper_state_broadcaster/joint_states"
+env_config.gripper_config.command_topic = "gripper/gripper_position_controller/commands"
+env_config.gripper_continous_control = True
+
 env = ManipulatorCartesianEnv(namespace="right", config=env_config)
 features = get_features(env)
-
-# Leader
-faster_publishing_config = FrankaConfig()
-faster_publishing_config.publish_frequency = 200.0
-leader = Robot(robot_config=faster_publishing_config, namespace="left")
 
 dataset = LeRobotDataset.create(
     repo_id=repo_id,
@@ -68,8 +78,24 @@ dataset = LeRobotDataset.create(
     use_videos=False,
 )
 
+# Leader
+leader = Robot(namespace="left")
+leader.wait_until_ready()
+
+path = Path("../crisp_py/config/trigger.yaml").resolve()
+leader_gripper = Gripper(
+    gripper_config=GripperConfig.from_yaml(path=path),
+    namespace="left/gripper",
+    index=1,
+)
+leader_gripper.wait_until_ready()
+leader_gripper.value
+
+# %% Prepare environment and leader
+
 env.home()
 env.reset()
+
 env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
 leader.wait_until_ready()
@@ -79,18 +105,13 @@ leader.cartesian_controller_parameters_client.load_param_config(
 leader.home()
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
+# %% Start interaction
+
 start_time = -1
+# step = 0
+# duration = 30  # seconds
 
-
-# %%
-def sync(leader, env):  # noqa: D103, ANN001
-    env.robot.set_target(pose=leader.end_effector_pose)
-
-
-leader.node.create_timer(
-    1.0 / faster_publishing_config.publish_frequency, lambda: sync(leader, env)
-)
-
+previous_pose = leader.end_effector_pose
 with RecordingManager(num_episodes=num_episodes) as recording_manager:
     while not recording_manager == "exit":
         print(
@@ -105,42 +126,51 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
         print("[blue]Started episode")
 
         while recording_manager.state == "recording":
-            # NOTE: This might look wrong but while doing kinesthetic teaching, the action is the reached
-            # state after steping. This is the position where the operator moved the robot arm to.
-            obs_pre_step = env._get_obs()
-            obs_after_step, _, _, _, _ = env.step(np.array([0.0] * 7))
-
             # Investigate timestamps:
             if start_time == -1:
                 start_time = time.time()
             print("Actual time is: ", time.time() - start_time)
-            print("Step time is: ", env.step * fps)
+            # print("Step time is: ", env.timestep * 1 / fps)
+            
+            action_pose = leader.end_effector_pose - previous_pose
+            previous_pose = leader.end_effector_pose
 
             action = np.concatenate(
-                (
-                    obs_after_step["cartesian"],
-                    np.array([obs_after_step["gripper"]]),
-                ),
-                axis=0,
-            )
-
-            action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
-            obs_dict = {
-                dim: obs_pre_step["cartesian"][i] if i < 6 else obs_pre_step["gripper"]
-                for i, dim in enumerate(features["observation.state"]["names"])
-            }
-            cam_frame = {
-                f"observation.images.{camera.config.camera_name}": obs_pre_step[
-                    f"{camera.config.camera_name}_image"
+                [
+                    action_pose.position,
+                    action_pose.orientation.as_euler("xyz"),
+                    np.array(
+                        [
+                            min(
+                                1.0,
+                                max(0.0, leader_gripper.value if leader_gripper.value is not None else 0.0),
+                            )
+                        ]
+                    ),
                 ]
-                for camera in env.cameras
-            }
-            action_frame = build_dataset_frame(features, action_dict, prefix="action")
-            obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
+            )
+            obs, _, _, _, _ = env.step(action, block=False)
 
-            frame = {**obs_frame, **action_frame, **cam_frame}
-            dataset.add_frame(frame, task=single_task)
-            # time.sleep(1 / fps)
+            # action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
+            # obs_dict = {
+            #     dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
+            #     for i, dim in enumerate(features["observation.state"]["names"])
+            # }
+            # # print(obs_dict)
+            # cam_frame = {
+            #     f"observation.images.{camera.config.camera_name}": obs[
+            #         f"{camera.config.camera_name}_image"
+            #     ]
+            #     for camera in env.cameras
+            # }
+            # action_frame = build_dataset_frame(features, action_dict, prefix="action")
+            # obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
+
+            # frame = {**obs_frame, **action_frame, **cam_frame}
+            # # if env.timestep % 10 == 0:
+            # dataset.add_frame(frame, task=single_task)
+            
+            time.sleep(1.0 / 30.0)  # Sleep to allow the environment to process the action
 
         if recording_manager.state == "paused":
             print(
@@ -152,6 +182,8 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             env.home()
             env.reset()
             start_time = -1
+            previous_pose = leader.end_effector_pose
+            step = 0
         while recording_manager.state == "paused":
             time.sleep(1.0)
 
@@ -168,6 +200,8 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
 
         if recording_manager.state == "exit":
             break
+
+dataset.push_to_hub(repo_id=repo_id)
 
 leader.home()
 leader.shutdown()
