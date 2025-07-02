@@ -162,19 +162,16 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             action = np.concatenate(
                 (
                     obs_after_step["cartesian"] - obs_pre_step["cartesian"],
-                    np.array([obs_after_step["gripper"][0]])- np.array([obs_pre_step["gripper"][0]]),
+                    np.array([obs_after_step["gripper"][0]]),
                 ),
                 axis=0,
             )
 
             action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
             obs_dict = {
-                dim: obs_pre_step["cartesian"][i] if i < 6 else obs_pre_step["gripper"]
+                dim: obs_pre_step["cartesian"][i] if i < 6 else float(obs_pre_step["gripper"][0])
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
-            # The 'gripper' key in teh dictonary is a numpy array but should be converted to a float
-            if "gripper" in obs_dict:
-                obs_dict["gripper"] = float(obs_dict["gripper"])
 
             cam_frame = {
                 f"observation.images.{camera.config.camera_name}": obs_pre_step[
