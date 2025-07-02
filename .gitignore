@@ -7,3 +7,5 @@ __pycache__
 *.egg-info
 build/lib
 pixi.lock
+pixi.toml
+scripts/cyclone_config.xml
