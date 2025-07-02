@@ -8,7 +8,6 @@ import PIL.Image  # noqa: F401
 
 from crisp_py.gripper import Gripper, GripperConfig
 from crisp_py.robot import Robot
-from crisp_py.robot_config import FrankaConfig
 import numpy as np
 
 from crisp_py.camera import FrankaCameraConfig
@@ -21,6 +20,7 @@ from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
 from crisp_gym.manipulator_env_config import FrankaEnvConfig
 from crisp_gym.record.recording_manager import RecordingManager
+
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -108,7 +108,7 @@ leader.controller_switcher_client.switch_controller("cartesian_impedance_control
 # %% Start interaction
 
 start_time = -1
-# step = 0
+step = 0
 # duration = 30  # seconds
 
 previous_pose = leader.end_effector_pose
@@ -125,14 +125,41 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
 
         print("[blue]Started episode")
 
+        start_time = time.time()
+        step = 0
+        obs = {}
         while recording_manager.state == "recording":
             # Investigate timestamps:
-            if start_time == -1:
-                start_time = time.time()
             step_time_init = time.time()
+
+            if step == 0:
+                previous_pose = leader.end_effector_pose
+                obs, _, _, _, _ = env.step(
+                    action=np.concatenate(
+                        [
+                            np.zeros(6),
+                            [
+                                np.clip(
+                                    leader_gripper.value
+                                    if leader_gripper.value is not None
+                                    else 0.0,
+                                    0.0,
+                                    1.0,
+                                )
+                            ],
+                        ]
+                    ),
+                    block=False,
+                )
+
+                sleep_time = 1 / 30.0 - (time.time() - step_time_init)
+                if sleep_time > 0:
+                    time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+                continue
+
             # print("Actual time is: ", time.time() - start_time)
-            #print("Step time is: ", env.timestep * 1 / 30)
-            
+            # print("Step time is: ", env.timestep * 1 / 30)
+
             action_pose = leader.end_effector_pose - previous_pose
             previous_pose = leader.end_effector_pose
 
@@ -142,15 +169,15 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                     action_pose.orientation.as_euler("xyz"),
                     np.array(
                         [
-                            min(
-                                1.0,
-                                max(0.0, leader_gripper.value if leader_gripper.value is not None else 0.0),
+                            np.clip(
+                                leader_gripper.value if leader_gripper.value is not None else 0.0,
+                                a_min=0.0,
+                                a_max=1.0,
                             )
                         ]
                     ),
                 ]
             )
-            obs, _, _, _, _ = env.step(action, block=False)
 
             action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
             obs_dict = {
@@ -169,10 +196,12 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
 
             frame = {**obs_frame, **action_frame, **cam_frame}
             dataset.add_frame(frame, task=single_task)
-            
+
+            obs, _, _, _, _ = env.step(action, block=False)
+
             sleep_time = 1 / 30.0 - (time.time() - step_time_init)
             if sleep_time > 0:
-                time.sleep(sleep_time)      # Sleep to allow the environment to process the action
+                time.sleep(sleep_time)  # Sleep to allow the environment to process the action
 
         if recording_manager.state == "paused":
             print(
