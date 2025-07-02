@@ -129,8 +129,9 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             # Investigate timestamps:
             if start_time == -1:
                 start_time = time.time()
-            print("Actual time is: ", time.time() - start_time)
-            # print("Step time is: ", env.timestep * 1 / fps)
+            step_time_init = time.time()
+            # print("Actual time is: ", time.time() - start_time)
+            #print("Step time is: ", env.timestep * 1 / 30)
             
             action_pose = leader.end_effector_pose - previous_pose
             previous_pose = leader.end_effector_pose
@@ -151,26 +152,27 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             )
             obs, _, _, _, _ = env.step(action, block=False)
 
-            # action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
-            # obs_dict = {
-            #     dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
-            #     for i, dim in enumerate(features["observation.state"]["names"])
-            # }
-            # # print(obs_dict)
-            # cam_frame = {
-            #     f"observation.images.{camera.config.camera_name}": obs[
-            #         f"{camera.config.camera_name}_image"
-            #     ]
-            #     for camera in env.cameras
-            # }
-            # action_frame = build_dataset_frame(features, action_dict, prefix="action")
-            # obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
+            action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
+            obs_dict = {
+                dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
+                for i, dim in enumerate(features["observation.state"]["names"])
+            }
+            # print(obs_dict)
+            cam_frame = {
+                f"observation.images.{camera.config.camera_name}": obs[
+                    f"{camera.config.camera_name}_image"
+                ]
+                for camera in env.cameras
+            }
+            action_frame = build_dataset_frame(features, action_dict, prefix="action")
+            obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
 
-            # frame = {**obs_frame, **action_frame, **cam_frame}
-            # # if env.timestep % 10 == 0:
-            # dataset.add_frame(frame, task=single_task)
+            frame = {**obs_frame, **action_frame, **cam_frame}
+            dataset.add_frame(frame, task=single_task)
             
-            time.sleep(1.0 / 30.0)  # Sleep to allow the environment to process the action
+            sleep_time = 1 / 30.0 - (time.time() - step_time_init)
+            if sleep_time > 0:
+                time.sleep(sleep_time)      # Sleep to allow the environment to process the action
 
         if recording_manager.state == "paused":
             print(
