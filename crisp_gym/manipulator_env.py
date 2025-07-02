@@ -106,14 +106,21 @@ class ManipulatorBaseEnv(gym.Env):
         Args:
             action (float): Action value for the gripper (0,1).
         """
-        if action >= self.config.gripper_threshold and self.gripper.is_open(
-            open_threshold=self.config.gripper_threshold
-        ):
-            self.gripper.close()
-        elif action < self.config.gripper_threshold and not self.gripper.is_open(
-            open_threshold=self.config.gripper_threshold
-        ):
-            self.gripper.open()
+        if not self.config.gripper_enabled:
+            return
+
+        if self.config.gripper_continous_control:
+            # If continuous control is enabled, set the gripper value directly
+            self.gripper.set_target(action)
+        else:
+            if action >= self.config.gripper_threshold and self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.close()
+            elif action < self.config.gripper_threshold and not self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.open()
 
     def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment.

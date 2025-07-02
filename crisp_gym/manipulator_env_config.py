@@ -24,6 +24,7 @@ class ManipulatorEnvConfig:
 
     gripper_enabled: bool = True
     gripper_threshold: float = 0.1
+    gripper_continous_control: bool = False
 
     max_episode_steps: int | None = None
 
