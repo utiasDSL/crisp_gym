@@ -155,6 +155,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 sleep_time = 1 / 30.0 - (time.time() - step_time_init)
                 if sleep_time > 0:
                     time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+                    step += 1
                 continue
 
             # print("Actual time is: ", time.time() - start_time)
@@ -202,6 +203,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             sleep_time = 1 / 30.0 - (time.time() - step_time_init)
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+            step += 1
 
         if recording_manager.state == "paused":
             print(
