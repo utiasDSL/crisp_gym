@@ -17,7 +17,7 @@ from rich import print
 
 import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv, ManipulatorJointEnv
 from crisp_gym.manipulator_env_config import AlohaFrankaEnvConfig
 from crisp_gym.record.recording_manager import RecordingManager
 
@@ -101,7 +101,7 @@ args = parser.parse_args()
 
 
 # Clean up existing dataset if it exists
-if Path(HF_LEROBOT_HOME / args.repo_id).exists():
+if not args.resume and Path(HF_LEROBOT_HOME / args.repo_id).exists():
     shutil.rmtree(HF_LEROBOT_HOME / args.repo_id)
 
 # Set up the config for the environment
@@ -118,8 +118,10 @@ gripper_config = GripperConfig.from_yaml(
 gripper_config.joint_state_topic = "gripper" + "/" + gripper_config.joint_state_topic
 gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
 
+ctrl_type = "cartesian" if not args.joint_control else "joint"
+
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
-env = ManipulatorCartesianEnv(namespace="right", config=env_config)
+env = ManipulatorCartesianEnv(namespace="right", config=env_config) if ctrl_type == "cartesian" else ManipulatorJointEnv(namespace='right', config=env_config)
 
 # %% Prepare the Leader
 leader = Robot(namespace="left")
@@ -135,7 +137,7 @@ leader_gripper.wait_until_ready()
 leader_gripper.disable_torque()
 
 # %% Prepare the dataset
-features = get_features(env)
+features = get_features(env, ctrl_type=ctrl_type)
 
 if args.resume:
     print(f"[green]Resuming recording from existing dataset: {args.repo_id}")
@@ -153,7 +155,6 @@ else:
 # %% Prepare environment and leader
 env.home()
 env.reset()
-env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
 leader.cartesian_controller_parameters_client.load_param_config(
     file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
@@ -163,6 +164,7 @@ leader.controller_switcher_client.switch_controller("cartesian_impedance_control
 
 # %% Start interaction
 previous_pose = leader.end_effector_pose
+previous_joint = leader.joint_values
 with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
     while not recording_manager == "exit":
         print(
@@ -185,24 +187,23 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
         # to set the parameters again.
         # Reset before starting
         env.reset()
-        env.robot.reset_targets()
         leader.reset_targets()
         leader.cartesian_controller_parameters_client.load_param_config(
             file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
         )
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
-        env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
         while recording_manager.state == "recording":
             step_time_init = time.time()
 
             if step == 0:
                 previous_pose = leader.end_effector_pose
+                previous_joint = leader.joint_values
                 # TODO: @danielsanjosepro make this steps clearer to the user
                 obs, _, _, _, _ = env.step(
                     action=np.concatenate(
                         [
-                            np.zeros(6),
+                            np.zeros(features["action"]["shape"] - 1),
                             [
                                 np.clip(
                                     leader_gripper.value
@@ -228,12 +229,14 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
 
             # TODO: @danielsanjosepro make this steps clearer to the user
             action_pose = leader.end_effector_pose - previous_pose
+            action_joint = leader.joint_values - previous_joint
             previous_pose = leader.end_effector_pose
+            previous_joint = leader.joint_values
 
             action = np.concatenate(
                 [
-                    action_pose.position,
-                    action_pose.orientation.as_euler("xyz"),
+                    list(action_pose.position) + list(action_pose.orientation.as_euler("xyz"))
+                    if ctrl_type == "cartesian" else list(action_joint),
                     np.array(
                         [
                             np.clip(
@@ -249,7 +252,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
             # TODO: @danielsanjosepro or @maxdoesch make this saving in dict format more elegant
             action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
             obs_dict = {
-                dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
+                dim: obs[ctrl_type][i] if i < features["observation.state"]["shape"] - 1 else obs["gripper"][0]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
             cam_frame = {
