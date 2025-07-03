@@ -213,7 +213,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
                     block=False,
                 )
 
-                sleep_time = 1 / 30.0 - (time.time() - step_time_init)
+                sleep_time = 1 / args.fps - (time.time() - step_time_init)
                 if sleep_time > 0:
                     time.sleep(sleep_time)  # Sleep to allow the environment to process the action
 
