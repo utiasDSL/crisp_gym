@@ -11,7 +11,8 @@ This repository contains all environments for to train policies using the *crisp
 
 The installation steps are similar to [crisp_py](https://github.com/utiasDSL/crisp_py/tree/feat-ruff-check?tab=readme-ov-file#git-installation-with-pixi) installation.
 In particular, if you work on a multi-machine setup, you should check how to setup CycloneDDS / Zenoh.
-> ![WARNING] It is important that you set the path for your configuration files.
+> [!WARNING]
+> It is important that you set the path for your configuration files.
 > Write a script in `scripts/set_env.sh` and export the environment variable:
 >```bash
 > export CRISP_CONFIG_PATH=/path/to/config
