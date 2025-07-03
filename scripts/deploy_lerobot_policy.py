@@ -126,7 +126,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             print(
                 "[blue] Stopped episode. Waiting for user to decide whether to save or delete the episode"
             )
-            # Reset funcionality to reset the robot and environment
+            # Reset functionality to reset the robot and environment
 
             env.home()
             env.reset()

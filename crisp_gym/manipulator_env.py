@@ -191,7 +191,8 @@ class ManipulatorBaseEnv(gym.Env):
             self.gripper.open()
         self.robot.home(home_config, blocking)
 
-        self.switch_controller(current_ctrl_type)
+        if not blocking:
+            self.switch_controller(current_ctrl_type)
 
     def move_to(
         self, position: List | NDArray | None = None, pose: Pose | None = None, speed: float = 0.05
@@ -265,6 +266,18 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.switch_controller("cartesian")
 
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[dict, dict]:
+        """Reset the environment."""
+        obs, info = super().reset(seed=seed, options=options)
+
+        self.robot.reset_targets()
+        self.robot.wait_until_ready()
+        self.switch_controller("cartesian")
+
+        return obs, info
+
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
 
@@ -328,6 +341,18 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         )
 
         self.switch_controller("joint")
+
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[dict, dict]:
+        """Reset the environment."""
+        obs, info = super().reset(seed=seed, options=options)
+
+        self.robot.reset_targets()
+        self.robot.wait_until_ready()
+        self.switch_controller("joint")
+
+        return obs, info
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
