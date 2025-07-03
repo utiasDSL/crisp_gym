@@ -67,7 +67,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--push-to-hub",
-    type=bool,
+    action=argparse.BooleanOptionalAction,
     default=True,
     help="Whether to push the dataset to the Hugging Face Hub.",
 )
@@ -89,16 +89,13 @@ parser.add_argument(
     default="trigger",
     help="Trigger configuration for the leader robot.",
 )
-# TODO: @maxdoesch add this
 parser.add_argument(
     "--joint-control",
-    type=bool,
-    default=False,
+    action="store_true",
     help="Whether to use joint control for the robot.",
 )
 
 args = parser.parse_args()
-
 
 # Clean up existing dataset if it exists
 if not args.resume and Path(HF_LEROBOT_HOME / args.repo_id).exists():
@@ -201,7 +198,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
                 obs, _, _, _, _ = env.step(
                     action=np.concatenate(
                         [
-                            np.zeros(features["action"]["shape"] - 1),
+                            np.zeros(features["action"]["shape"][0] - 1),
                             [
                                 np.clip(
                                     leader_gripper.value
@@ -251,7 +248,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
             # TODO: @danielsanjosepro or @maxdoesch make this saving in dict format more elegant
             action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
             obs_dict = {
-                dim: obs[ctrl_type][i] if i < features["observation.state"]["shape"] - 1 else obs["gripper"][0]
+                dim: obs[ctrl_type][i] if i < features["observation.state"]["shape"][0] - 1 else obs["gripper"][0]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
             cam_frame = {
@@ -268,7 +265,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
 
             obs, _, _, _, _ = env.step(action, block=False)
 
-            sleep_time = 1 / args.fps - (time.time() - step_time_init)
+            sleep_time = 1.0 / args.fps - (time.time() - step_time_init)
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
 
