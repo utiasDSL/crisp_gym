@@ -130,7 +130,6 @@ leader_gripper = Gripper(
     gripper_config=GripperConfig.from_yaml(path=leader_gripper_path),
     namespace="left/gripper",
 )
-print(leader_gripper._index)
 leader_gripper.wait_until_ready()
 leader_gripper.disable_torque()
 
@@ -153,12 +152,11 @@ else:
 # %% Prepare environment and leader
 env.home()
 env.reset()
-env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
+leader.home()
 leader.cartesian_controller_parameters_client.load_param_config(
     file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
 )
-leader.home()
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
 # %% Start interaction
@@ -177,26 +175,24 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
         print("[blue]Started episode")
 
         start_time = time.time()
-        # TODO: @danielsanjosepro remove the step variable and use a flag to indicate the first step
-        step = 0
+        is_first_step = True
         obs = {}
 
         # HACK: be sure that this one is running. Maybe the controller failed during recording so we need
         # to set the parameters again.
         # Reset before starting
-        env.reset()
-        env.robot.reset_targets()
         leader.reset_targets()
         leader.cartesian_controller_parameters_client.load_param_config(
             file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
         )
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
-        env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+
+        env.reset()
 
         while recording_manager.state == "recording":
             step_time_init = time.time()
 
-            if step == 0:
+            if is_first_step:
                 previous_pose = leader.end_effector_pose
                 # TODO: @danielsanjosepro make this steps clearer to the user
                 obs, _, _, _, _ = env.step(
@@ -220,7 +216,8 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
                 sleep_time = 1 / 30.0 - (time.time() - step_time_init)
                 if sleep_time > 0:
                     time.sleep(sleep_time)  # Sleep to allow the environment to process the action
-                step += 1
+
+                is_first_step = False
                 continue
 
             # print("Actual time is: ", time.time() - start_time)
@@ -269,8 +266,6 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
             sleep_time = 1 / args.fps - (time.time() - step_time_init)
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
-
-            step += 1
 
         if recording_manager.state == "paused":
             print(
