@@ -97,7 +97,7 @@ class ManipulatorBaseEnv(gym.Env):
             ),
             axis=0,
         )
-        obs["gripper"] = 1 - np.array([self.gripper.value]) if self.config.gripper_enabled else 0.0
+        obs["gripper"] = 1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
         return obs
 
     def _set_gripper_action(self, action: float):
