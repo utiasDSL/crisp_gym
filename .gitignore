@@ -7,3 +7,4 @@ __pycache__
 *.egg-info
 build/lib
 pixi.lock
+scripts/set_env.sh

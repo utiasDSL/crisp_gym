@@ -7,7 +7,10 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [activation]
-scripts = ["scripts/set_cyclone.sh"]
+scripts = [
+    "scripts/set_cyclone.sh",
+    "scripts/set_env.sh",
+]
 
 [dependencies]
 python = "3.11.*"
