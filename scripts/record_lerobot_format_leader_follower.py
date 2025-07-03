@@ -33,6 +33,9 @@ parser.add_argument(
     "--max-duration", type=float, default=30.0, help="Maximum episode duration in seconds"
 )
 parser.add_argument("--num-episodes", type=int, default=1, help="Number of episodes to record")
+parser.add_argument("--resume", type=bool, default=False, help="Resume recording of an already existing dataset")
+
+
 args = parser.parse_args()
 
 repo_id = args.repo_id
@@ -41,6 +44,7 @@ robot_type = args.robot_type
 fps = args.fps
 max_episode_duration = args.max_duration
 num_episodes = args.num_episodes
+resume = args.resume
 
 # Clean up existing dataset if it exists
 if Path(HF_LEROBOT_HOME / repo_id).exists():
@@ -70,13 +74,18 @@ env_config.gripper_continous_control = True
 env = ManipulatorCartesianEnv(namespace="right", config=env_config)
 features = get_features(env)
 
-dataset = LeRobotDataset.create(
-    repo_id=repo_id,
-    fps=fps,
-    robot_type=robot_type,
-    features=features,
-    use_videos=False,
-)
+if resume:
+    print(f"[green]Resuming recording from existing dataset: {repo_id}")
+    dataset = LeRobotDataset(repo_id=repo_id)
+else:
+    print(f"[green]Creating new dataset: {repo_id}")
+    dataset = LeRobotDataset.create(
+        repo_id=repo_id,
+        fps=fps,
+        robot_type=robot_type,
+        features=features,
+        use_videos=False,
+    )
 
 # Leader
 leader = Robot(namespace="left")
@@ -89,7 +98,7 @@ leader_gripper = Gripper(
     index=1,
 )
 leader_gripper.wait_until_ready()
-leader_gripper.value
+leader_gripper.disable_torque()
 
 # %% Prepare environment and leader
 
@@ -210,6 +219,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             sleep_time = 1 / 30.0 - (time.time() - step_time_init)
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+            step += 1
 
             step += 1
 
@@ -238,7 +248,7 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
         if recording_manager.state == "exit":
             break
 
-dataset.push_to_hub(repo_id=repo_id)
+dataset.push_to_hub(repo_id=repo_id, private=True)
 
 leader.home()
 leader.shutdown()
