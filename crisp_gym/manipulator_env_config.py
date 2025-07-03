@@ -134,3 +134,48 @@ class OnlyWristCamFrankaEnvConfig(ManipulatorEnvConfig):
     )
 
     max_episode_steps: int | None = 1000
+
+
+@dataclass
+class AlohaFrankaEnvConfig(ManipulatorEnvConfig):
+    """Custom Franaka Gym Environment Configuration for Franka with an Aloha gripper and cameras."""
+
+    control_frequency: float = 10.0
+
+    # The aloha gripper can be controlled in a continuous manner, so we set this to True.
+    gripper_enabled: bool = True
+    gripper_continous_control: bool = True
+
+    robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
+
+    gripper_config: GripperConfig = field(
+        default_factory=lambda: GripperConfig(
+            min_value=0,
+            max_value=1,
+            command_topic="gripper/gripper_position_controller/commands",
+            joint_state_topic="gripper/joint_states",
+            reboot_service="gripper/reboot_gripper",
+            enable_torque_service="gripper/dynamixel_hardware_interface/set_dxl_torque",
+        )
+    )
+
+    camera_configs: List[CameraConfig] = field(
+        default_factory=lambda: [
+            CameraConfig(
+                camera_name="primary",
+                camera_frame="primary_link",
+                resolution=(256, 256),
+                camera_color_image_topic="right_third_person_camera/color/image_raw",
+                camera_color_info_topic="right_third_person_camera/color/camera_info",
+            ),
+            CameraConfig(
+                camera_name="wrist",
+                camera_frame="wrist_link",
+                resolution=(256, 256),
+                camera_color_image_topic="right_wrist_camera/color/image_rect_raw",
+                camera_color_info_topic="right_wrist_camera/color/camera_info",
+            ),
+        ]
+    )
+
+    max_episode_steps: int | None = 1000
