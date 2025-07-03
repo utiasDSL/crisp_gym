@@ -113,10 +113,10 @@ if path_to_config is None:
 
 # Set up the envionment configuration
 gripper_config = GripperConfig.from_yaml(
-    path=(Path(path_to_config) / args.right_griper_config + ".yaml").resolve()
+    path=(Path(path_to_config) / (args.right_gripper_config + ".yaml")).resolve()
 )
-gripper_config.joint_state_topic = "gripper" + gripper_config.joint_state_topic
-gripper_config.command_topic = "gripper" + gripper_config.command_topic
+gripper_config.joint_state_topic = "gripper" + "/" + gripper_config.joint_state_topic
+gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
 
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
 env = ManipulatorCartesianEnv(namespace="right", config=env_config)
@@ -125,11 +125,12 @@ env = ManipulatorCartesianEnv(namespace="right", config=env_config)
 leader = Robot(namespace="left")
 leader.wait_until_ready()
 
-leader_gripper_path = (Path(path_to_config) / args.trigger_config).resolve()
+leader_gripper_path = (Path(path_to_config) / (args.trigger_config + ".yaml")).resolve()
 leader_gripper = Gripper(
     gripper_config=GripperConfig.from_yaml(path=leader_gripper_path),
     namespace="left/gripper",
 )
+print(leader_gripper._index)
 leader_gripper.wait_until_ready()
 leader_gripper.disable_torque()
 
@@ -155,7 +156,7 @@ env.reset()
 env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
 leader.cartesian_controller_parameters_client.load_param_config(
-    file_path=Path(path_to_config) / "control" / args.leader_controller + ".yaml"
+    file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
 )
 leader.home()
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
@@ -187,7 +188,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
         env.robot.reset_targets()
         leader.reset_targets()
         leader.cartesian_controller_parameters_client.load_param_config(
-            file_path=Path(path_to_config) / "control" / args.leader_controller + ".yaml"
+            file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
         )
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
         env.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
@@ -261,7 +262,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
             obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
 
             frame = {**obs_frame, **action_frame, **cam_frame}
-            dataset.add_frame(frame, task=args.single_task)
+            dataset.add_frame(frame, task=args.task)
 
             obs, _, _, _, _ = env.step(action, block=False)
 
