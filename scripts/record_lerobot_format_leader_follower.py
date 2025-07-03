@@ -202,7 +202,6 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
                 dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
-            # print(obs_dict)
             cam_frame = {
                 f"observation.images.{camera.config.camera_name}": obs[
                     f"{camera.config.camera_name}_image"
@@ -220,6 +219,8 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             sleep_time = 1 / 30.0 - (time.time() - step_time_init)
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+            step += 1
+
             step += 1
 
         if recording_manager.state == "paused":
