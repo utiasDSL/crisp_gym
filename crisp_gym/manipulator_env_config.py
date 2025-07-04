@@ -34,10 +34,10 @@ class ManipulatorEnvConfig:
     gripper_continous_control: bool = False
 
     cartesian_control_param_config: Optional[Path] = field(
-        default_factory=lambda: path_to_crisp_py_config / Path("control/cartesian_impedance_controller.yaml")
+        default_factory=lambda: path_to_crisp_py_config / Path("control/default_cartesian_impedance.yaml")
     )
     joint_control_param_config: Optional[Path] = field(
-        default_factory=lambda: path_to_crisp_py_config / Path("control/joint_impedance_controller.yaml")
+        default_factory=lambda: path_to_crisp_py_config / Path("control/joint_control.yaml")
     )
 
     max_episode_steps: int | None = None

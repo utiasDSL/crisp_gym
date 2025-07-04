@@ -56,12 +56,12 @@ parser.add_argument(
 parser.add_argument(
     "--num-episodes",
     type=int,
-    default=1,
+    default=10,
     help="Number of episodes to record",
 )
 parser.add_argument(
     "--resume",
-    type=bool,
+    action="store_true",
     default=False,
     help="Resume recording of an already existing dataset",
 )
@@ -118,6 +118,7 @@ gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
+env_config.control_frequency = args.fps
 env = ManipulatorCartesianEnv(namespace="right", config=env_config) if ctrl_type == "cartesian" else ManipulatorJointEnv(namespace='right', config=env_config)
 
 # %% Prepare the Leader
@@ -189,8 +190,6 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
         while recording_manager.state == "recording":
-            step_time_init = time.time()
-
             if is_first_step:
                 previous_pose = leader.end_effector_pose
                 previous_joint = leader.joint_values
@@ -210,12 +209,8 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
                             ],
                         ]
                     ),
-                    block=False,
+                    block=True,
                 )
-
-                sleep_time = 1 / args.fps - (time.time() - step_time_init)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)  # Sleep to allow the environment to process the action
 
                 is_first_step = False
                 continue
@@ -263,11 +258,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
             frame = {**obs_frame, **action_frame, **cam_frame}
             dataset.add_frame(frame, task=args.task)
 
-            obs, _, _, _, _ = env.step(action, block=False)
-
-            sleep_time = 1.0 / args.fps - (time.time() - step_time_init)
-            if sleep_time > 0:
-                time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+            obs, _, _, _, _ = env.step(action, block=True)
 
         if recording_manager.state == "paused":
             print(
