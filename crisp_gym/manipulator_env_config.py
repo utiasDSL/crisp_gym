@@ -8,11 +8,14 @@ from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
 from crisp_py.robot_config import FrankaConfig, RobotConfig
 
-path_to_crisp_py_config = os.environ.get("CRISP_CONFIG_PATH")
-if path_to_crisp_py_config is None:
-    raise ValueError(
-        "You need to set the environment variable CRISP_CONFIG_PATH in order to load configs for the gripper and controller.\nTo do this execute export CRISP_CONFIG_PATH=path\\to\\config."
+CRISP_CONFIG_PATH = os.environ.get("CRISP_CONFIG_PATH")
+if CRISP_CONFIG_PATH is None:
+    raise EnvironmentError(
+        "Environment variable 'CRISP_CONFIG_PATH' is not set. Please run:\n"
+        "  export CRISP_CONFIG_PATH=/path/to/config"
     )
+
+CRISP_CONFIG_PATH = Path(CRISP_CONFIG_PATH)
 
 
 @dataclass
@@ -34,10 +37,10 @@ class ManipulatorEnvConfig:
     gripper_continous_control: bool = False
 
     cartesian_control_param_config: Optional[Path] = field(
-        default_factory=lambda: path_to_crisp_py_config / Path("control/default_cartesian_impedance.yaml")
+        default_factory=lambda: CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
     )
     joint_control_param_config: Optional[Path] = field(
-        default_factory=lambda: path_to_crisp_py_config / Path("control/joint_control.yaml")
+        default_factory=lambda: CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
     )
 
     max_episode_steps: int | None = None
