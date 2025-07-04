@@ -20,20 +20,14 @@ CRISP_CONFIG_PATH = Path(CRISP_CONFIG_PATH)
 
 @dataclass
 class ManipulatorEnvConfig:
-    """Manipulator Gym Environment Configuration.
-
-    This class is a configuration for the Manipulator Gym Environment.
-    It contains the robot and camera configurations.
-    """
+    """Manipulator Gym Environment Configuration."""
 
     control_frequency: float
-
-    gripper_threshold: float
-
     robot_config: RobotConfig
     gripper_config: GripperConfig
     camera_configs: List[CameraConfig]
 
+    gripper_threshold: float = 0.1
     gripper_enabled: bool = True
     gripper_continous_control: bool = False
 
@@ -44,7 +38,7 @@ class ManipulatorEnvConfig:
         default_factory=lambda: CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
     )
 
-    max_episode_steps: int | None = None
+    max_episode_steps: Optional[int] = None
 
 
 @dataclass
