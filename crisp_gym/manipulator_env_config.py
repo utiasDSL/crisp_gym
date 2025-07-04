@@ -34,9 +34,6 @@ class ManipulatorEnvConfig:
     gripper_config: GripperConfig
     camera_configs: List[CameraConfig]
 
-    gripper_enabled: bool = True
-    gripper_continous_control: bool = False
-
     cartesian_control_param_config: Optional[Path] = field(
         default_factory=lambda: CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
     )
