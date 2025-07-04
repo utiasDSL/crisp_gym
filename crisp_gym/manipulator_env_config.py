@@ -28,12 +28,13 @@ class ManipulatorEnvConfig:
 
     control_frequency: float
 
+    gripper_threshold: float
+
     robot_config: RobotConfig
     gripper_config: GripperConfig
     camera_configs: List[CameraConfig]
 
     gripper_enabled: bool = True
-    gripper_threshold: float = 0.1
     gripper_continous_control: bool = False
 
     cartesian_control_param_config: Optional[Path] = field(
