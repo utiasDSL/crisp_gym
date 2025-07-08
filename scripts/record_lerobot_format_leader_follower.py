@@ -30,10 +30,11 @@ parser.add_argument(
     help="Repository ID for the dataset",
 )
 parser.add_argument(
-    "--task",
+    "--tasks",
     type=str,
-    default="pick the lego block.",
-    help="Task description",
+    nargs="+",
+    default=["pick the lego block."],
+    help="List of task descriptions to record data for, e.g. 'clean red' 'clean green'",
 )
 parser.add_argument(
     "--robot-type",
@@ -159,6 +160,8 @@ leader.cartesian_controller_parameters_client.load_param_config(
 )
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
+tasks = list(args.tasks)
+
 # %% Start interaction
 previous_pose = leader.end_effector_pose
 previous_joint = leader.joint_values
@@ -166,6 +169,10 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
     while not recording_manager == "exit":
         print(
             f"[magenta bold]=== Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes} ==="
+        )
+        task = tasks[np.random.randint(0, len(tasks))]
+        print(
+            f"[magenta bold]=== Task: [italic]{task}[/italic] ==="
         )
 
         if recording_manager.state == "is_waiting":
@@ -256,7 +263,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
             obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
 
             frame = {**obs_frame, **action_frame, **cam_frame}
-            dataset.add_frame(frame, task=args.task)
+            dataset.add_frame(frame, task=task)
 
             obs, _, _, _, _ = env.step(action, block=True)
 
