@@ -19,7 +19,10 @@ import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv, ManipulatorJointEnv
 from crisp_gym.manipulator_env_config import AlohaFrankaEnvConfig
-from crisp_gym.record.recording_manager import RecordingManager
+from crisp_gym.record.recording_manager import (
+    KeyboardRecordingManager,
+    ROSRecordingManager,
+)
 
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
@@ -79,17 +82,36 @@ parser.add_argument(
     help="Controller configuration for the leader robot.",
 )
 parser.add_argument(
-    "--right-gripper-config",
-    type=str,
-    default="gripper_right",
-    help="Gripper configuration for the right robot.",
-)
-parser.add_argument(
     "--trigger-config",
     type=str,
     default="trigger",
     help="Trigger configuration for the leader robot.",
 )
+parser.add_argument(
+    "--time-to-home",
+    type=float,
+    default=3.0,
+    help="Time needed to home.",
+)
+parser.add_argument(
+    "--recording-manager-type",
+    type=str,
+    default="keyboard",
+    help="Type of recording manager to use. Currently only 'keyboard' and 'ros' are supported.",
+)
+parser.add_argument(
+    "--leader-side",
+    type=str,
+    default="left",
+    help="Side of the leader robot (left or right).",
+)
+parser.add_argument(
+    "--use-close-home",
+    action="store_true",
+    help="Whether to use the close home configuration for the robot.",
+)
+
+# TODO: @maxdoesch add this
 parser.add_argument(
     "--joint-control",
     action="store_true",
@@ -102,6 +124,18 @@ args = parser.parse_args()
 if not args.resume and Path(HF_LEROBOT_HOME / args.repo_id).exists():
     shutil.rmtree(HF_LEROBOT_HOME / args.repo_id)
 
+# TODO: find a fix solution for this
+home_config = [
+    -1.73960110e-02,
+    9.55319758e-02,
+    8.09703053e-04,
+    -1.94272034e00,
+    -4.01435784e-03,
+    2.06584183e00,
+    7.97426445e-01,
+]
+
+
 # Set up the config for the environment
 path_to_config = os.environ.get("CRISP_CONFIG_PATH")
 if path_to_config is None:
@@ -109,9 +143,22 @@ if path_to_config is None:
         "You need to set the environment variable CRISP_CONFIG_PATH in order to load configs for the gripper and controller.\nTo do this execute export CRISP_CONFIG_PATH=path\\to\\config."
     )
 
+if args.leader_side not in ["left", "right"]:
+    raise ValueError(
+        f"Invalid leader side: {args.leader_side}. It should be either 'left' or 'right'."
+    )
+
+if args.leader_side == "right":
+    raise NotImplementedError(
+        "Currently, only the left side is supported for the leader robot. Please set --leader-side to 'left'."
+    )
+
+leader_side = args.leader_side
+follower_side = "right" if leader_side == "left" else "left"
+
 # Set up the envionment configuration
 gripper_config = GripperConfig.from_yaml(
-    path=(Path(path_to_config) / (args.right_gripper_config + ".yaml")).resolve()
+    path=(Path(path_to_config) / ("gripper_" + follower_side + ".yaml")).resolve()
 )
 gripper_config.joint_state_topic = "gripper" + "/" + gripper_config.joint_state_topic
 gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
@@ -120,16 +167,27 @@ ctrl_type = "cartesian" if not args.joint_control else "joint"
 
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
 env_config.control_frequency = args.fps
-env = ManipulatorCartesianEnv(namespace="right", config=env_config) if ctrl_type == "cartesian" else ManipulatorJointEnv(namespace='right', config=env_config)
+if args.use_close_home:
+    env_config.robot_config.home_config = home_config
+    env_config.robot_config.time_to_home = args.time_to_home
+env = ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
 
 # %% Prepare the Leader
-leader = Robot(namespace="left")
+leader = Robot(namespace=leader_side)
+if args.use_close_home:
+    leader.config.home_config = home_config
+    leader.config.time_to_home = args.time_to_home
 leader.wait_until_ready()
 
-leader_gripper_path = (Path(path_to_config) / (args.trigger_config + ".yaml")).resolve()
+# NOTE: This is temporary since there is still no trigger in the right side.
+if leader_side == "left":
+    leader_gripper_path = (Path(path_to_config) / (args.trigger_config + ".yaml")).resolve()
+else:
+    leader_gripper_path = (Path(path_to_config) / "gripper_right.yaml").resolve()
+
 leader_gripper = Gripper(
     gripper_config=GripperConfig.from_yaml(path=leader_gripper_path),
-    namespace="left/gripper",
+    namespace=f"{leader_side}/gripper",
 )
 leader_gripper.wait_until_ready()
 leader_gripper.disable_torque()
@@ -140,8 +198,20 @@ features = get_features(env, ctrl_type=ctrl_type)
 if args.resume:
     print(f"[green]Resuming recording from existing dataset: {args.repo_id}")
     dataset = LeRobotDataset(repo_id=args.repo_id)
+    if args.num_episodes <= dataset.num_episodes:
+        print(
+            f"[yellow] The dataset already has {dataset.num_episodes} recorded. Please select a larger number.[/yellow]"
+        )
+        exit()
 else:
     print(f"[green]Creating new dataset: {args.repo_id}")
+    # Clean up existing dataset if it exists
+    if Path(HF_LEROBOT_HOME / args.repo_id).exists():
+        print(
+            "[yellow]WARNING: The repo_id already exists. If you decide to continue, you will overwrite the content. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise press <Enter> to continue."
+        )
+        input()
+        shutil.rmtree(HF_LEROBOT_HOME / args.repo_id)
     dataset = LeRobotDataset.create(
         repo_id=args.repo_id,
         fps=args.fps,
@@ -165,10 +235,25 @@ tasks = list(args.tasks)
 # %% Start interaction
 previous_pose = leader.end_effector_pose
 previous_joint = leader.joint_values
-with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
+
+start_episode_number = dataset.num_episodes
+
+if args.recording_manager_type == "keyboard":
+    reconding_manager_cls = KeyboardRecordingManager
+elif args.recording_manager_type == "ros":
+    reconding_manager_cls = ROSRecordingManager
+else:
+    raise ValueError(
+        f"Unsupported recording manager type: {args.recording_manager_type}. "
+        "Currently only 'keyboard' and 'ros' are supported."
+    )
+
+with reconding_manager_cls(
+    num_episodes=args.num_episodes - start_episode_number
+) as recording_manager:
     while not recording_manager == "exit":
         print(
-            f"[magenta bold]=== Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes} ==="
+            f"[magenta bold]=== Episode {recording_manager.episode_count + 1 + start_episode_number} / {recording_manager.num_episodes + start_episode_number} ==="
         )
         task = tasks[np.random.randint(0, len(tasks))]
         print(
@@ -178,7 +263,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
         if recording_manager.state == "is_waiting":
             print("[magenta]Waiting for user to start.")
             while recording_manager.state == "is_waiting":
-                time.sleep(1.0)
+                time.sleep(0.05)
 
         print("[blue]Started episode")
 
@@ -269,7 +354,7 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
 
         if recording_manager.state == "paused":
             print(
-                "[blue] Stopped episode. Waiting for user to decide whether to save or delete the episode"
+                "[blue]Stopped episode. Waiting for user to decide whether to save or delete the episode"
             )
             # Start homing for both robots
             leader.home(blocking=False)
@@ -292,7 +377,12 @@ with RecordingManager(num_episodes=args.num_episodes) as recording_manager:
         if recording_manager.state == "exit":
             break
 
-if args.push_to_hub:
+if args.not_push_to_hub:
+    print(
+        "[green]Not pushing dataset to Hugging Face Hub. Use --not-push-to-hub to skip this step."
+    )
+    # dataset.push_to_hub(repo_id=args.repo_id, private=True)
+else:
     print(f"[green]Pushing dataset to Hugging Face Hub with repo_id: {args.repo_id}")
     dataset.push_to_hub(repo_id=args.repo_id, private=True)
 

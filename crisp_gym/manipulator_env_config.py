@@ -150,7 +150,7 @@ class OnlyWristCamFrankaEnvConfig(ManipulatorEnvConfig):
 
 @dataclass
 class AlohaFrankaEnvConfig(ManipulatorEnvConfig):
-    """Custom Franaka Gym Environment Configuration for Franka with an Aloha gripper and cameras."""
+    """Custom Franka Gym Environment Configuration for Franka with an Aloha gripper and cameras."""
 
     control_frequency: float = 10.0
 
