@@ -24,7 +24,7 @@ def get_features(env: ManipulatorBaseEnv, ctrl_type: str = 'cartesian') -> Dict[
 
     features = {}
     for cam in env.cameras:
-        # TODO: cmaera feature
+        # TODO: camera feature
         # camera_key_map = {"third_person_image": "primary", "wrist_image": "wrist"}
         features[f"observation.images.{cam.config.camera_name}"] = {
             "dtype": "image",
