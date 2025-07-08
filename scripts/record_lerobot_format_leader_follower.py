@@ -170,7 +170,11 @@ env_config.control_frequency = args.fps
 if args.use_close_home:
     env_config.robot_config.home_config = home_config
     env_config.robot_config.time_to_home = args.time_to_home
-env = ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+env = (
+    ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+    if ctrl_type == "cartesian"
+    else ManipulatorJointEnv(namespace=follower_side, config=env_config)
+)
 
 # %% Prepare the Leader
 leader = Robot(namespace=leader_side)
@@ -256,9 +260,7 @@ with reconding_manager_cls(
             f"[magenta bold]=== Episode {recording_manager.episode_count + 1 + start_episode_number} / {recording_manager.num_episodes + start_episode_number} ==="
         )
         task = tasks[np.random.randint(0, len(tasks))]
-        print(
-            f"[magenta bold]=== Task: [italic]{task}[/italic] ==="
-        )
+        print(f"[magenta bold]=== Task: [italic]{task}[/italic] ===")
 
         if recording_manager.state == "is_waiting":
             print("[magenta]Waiting for user to start.")
@@ -319,7 +321,8 @@ with reconding_manager_cls(
             action = np.concatenate(
                 [
                     list(action_pose.position) + list(action_pose.orientation.as_euler("xyz"))
-                    if ctrl_type == "cartesian" else list(action_joint),
+                    if ctrl_type == "cartesian"
+                    else list(action_joint),
                     np.array(
                         [
                             np.clip(
@@ -335,7 +338,9 @@ with reconding_manager_cls(
             # TODO: @danielsanjosepro or @maxdoesch make this saving in dict format more elegant
             action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
             obs_dict = {
-                dim: obs[ctrl_type][i] if i < features["observation.state"]["shape"][0] - 1 else obs["gripper"][0]
+                dim: obs[ctrl_type][i]
+                if i < features["observation.state"]["shape"][0] - 1
+                else obs["gripper"][0]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
             cam_frame = {
@@ -377,10 +382,8 @@ with reconding_manager_cls(
         if recording_manager.state == "exit":
             break
 
-if args.not_push_to_hub:
-    print(
-        "[green]Not pushing dataset to Hugging Face Hub. Use --not-push-to-hub to skip this step."
-    )
+if not args.push_to_hub:
+    print("[green]Not pushing dataset to Hugging Face Hub. Use --no-push-to-hub to skip this step.")
     # dataset.push_to_hub(repo_id=args.repo_id, private=True)
 else:
     print(f"[green]Pushing dataset to Hugging Face Hub with repo_id: {args.repo_id}")
