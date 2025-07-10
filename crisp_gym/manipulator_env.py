@@ -1,13 +1,16 @@
 """General manipulator environments."""
 
+import threading
 from typing import Any, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
+import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
 from numpy.typing import NDArray
+from rclpy.executors import MultiThreadedExecutor
 from scipy.spatial.transform import Rotation
 
 from crisp_gym.manipulator_env_config import FrankaEnvConfig, ManipulatorEnvConfig
@@ -30,21 +33,35 @@ class ManipulatorBaseEnv(gym.Env):
         super().__init__()
         self.config = config if config else FrankaEnvConfig()
 
-        self.robot = Robot(namespace=namespace, robot_config=self.config.robot_config)
-        self.gripper = Gripper(namespace=namespace, gripper_config=self.config.gripper_config)
+        if not rclpy.ok():
+            rclpy.init()
+
+        self.node = rclpy.create_node("env_node", namespace=namespace)
+
+        self.robot = Robot(
+            node=self.node,
+            namespace=namespace,
+            robot_config=self.config.robot_config,
+            spin_node=False,
+        )
+        self.gripper = Gripper(
+            node=self.node,
+            namespace=namespace,
+            gripper_config=self.config.gripper_config,
+            spin_node=False,
+        )
         self.cameras = [
-            Camera(namespace=namespace, config=camera_config)
+            Camera(
+                # node=self.node,
+                namespace=namespace,
+                config=camera_config,
+                # spin_node=False,
+            )
             for camera_config in self.config.camera_configs
         ]
 
         self.timestep = 0
         self.ctrl_type = None
-
-        self.robot.wait_until_ready(timeout=3)
-        if self.config.gripper_enabled:
-            self.gripper.wait_until_ready(timeout=3)
-        for camera in self.cameras:
-            camera.wait_until_ready(timeout=3)
 
         self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
 
@@ -76,6 +93,21 @@ class ManipulatorBaseEnv(gym.Env):
             }
         )
 
+        threading.Thread(target=self._spin_node, daemon=True).start()
+
+    def wait_until_ready(self):
+        """Wait until the robot is ready."""
+        self.robot.wait_until_ready(3.0)
+        self.gripper.wait_until_ready(3.0)
+        for camera in self.cameras:
+            camera.wait_until_ready(3.0)
+
+    def _spin_node(self):
+        executor = MultiThreadedExecutor(num_threads=6)
+        executor.add_node(self.node)
+        while rclpy.ok():
+            executor.spin_once(timeout_sec=0.1)
+
     def _get_obs(self) -> dict:
         """Retrieve the current observation from the robot.
 
@@ -97,7 +129,9 @@ class ManipulatorBaseEnv(gym.Env):
             ),
             axis=0,
         )
-        obs["gripper"] = 1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
+        obs["gripper"] = (
+            1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
+        )
         return obs
 
     def _set_gripper_action(self, action: float):
@@ -306,6 +340,10 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[6])
 
         if block:
+            if self.control_rate.time_until_next_call() < 0:
+                self.robot.node.get_logger().warn(
+                    f"Control rate is not being maintained by {-self.control_rate.time_until_next_call()} seconds."
+                )
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)

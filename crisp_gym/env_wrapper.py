@@ -14,6 +14,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
+import rclpy
 from numpy.typing import NDArray
 
 from crisp_gym.manipulator_env import ManipulatorBaseEnv
@@ -211,6 +212,8 @@ class RecedingHorizon(gym.Wrapper):
 
     def close(self) -> None:
         """Clean up the environment's resources."""
+        if rclpy.ok():
+            rclpy.shutdown()
         self.env.close()
 
     def __getattr__(self, name: str) -> Any:

@@ -2,18 +2,16 @@
 
 import argparse  # noqa: I001
 import os
-import shutil
 import time
 from pathlib import Path
 import PIL.Image  # noqa: F401
+import logging
 
 from crisp_py.gripper import Gripper, GripperConfig
+from crisp_py.camera import CameraConfig
 from crisp_py.robot import Robot
 import numpy as np
-
-from lerobot.common.datasets.lerobot_dataset import HF_LEROBOT_HOME, LeRobotDataset
-from lerobot.common.datasets.utils import build_dataset_frame
-from rich import print
+from rich.logging import RichHandler
 
 import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
@@ -24,6 +22,8 @@ from crisp_gym.record.recording_manager import (
     ROSRecordingManager,
 )
 
+FORMAT = "%(message)s"
+logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -130,6 +130,15 @@ home_config = [
     2.06584183e00,
     7.97426445e-01,
 ]
+home_right_leader = [
+    -0.02312892,
+    -0.10664185,
+    -0.0195703,
+    -1.75644521,
+    -0.00732298,
+    1.68992915,
+    0.8040582,
+]
 
 
 # Set up the config for the environment
@@ -144,11 +153,6 @@ if args.leader_side not in ["left", "right"]:
         f"Invalid leader side: {args.leader_side}. It should be either 'left' or 'right'."
     )
 
-if args.leader_side == "right":
-    raise NotImplementedError(
-        "Currently, only the left side is supported for the leader robot. Please set --leader-side to 'left'."
-    )
-
 leader_side = args.leader_side
 follower_side = "right" if leader_side == "left" else "left"
 
@@ -160,15 +164,27 @@ gripper_config.joint_state_topic = "gripper" + "/" + gripper_config.joint_state_
 gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
 
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
+if args.leader_side == "right":
+    env_config.camera_configs = [
+        CameraConfig(
+            camera_name="wrist",
+            camera_frame="wrist_link",
+            resolution=(256, 256),
+            camera_color_image_topic="left_wrist_camera/color/image_rect_raw",
+            camera_color_info_topic="left_wrist_camera/color/camera_info",
+        ),
+    ]
 if args.use_close_home:
     env_config.robot_config.home_config = home_config
     env_config.robot_config.time_to_home = args.time_to_home
+
 env = ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+env.wait_until_ready()
 
 # %% Prepare the Leader
 leader = Robot(namespace=leader_side)
 if args.use_close_home:
-    leader.config.home_config = home_config
+    leader.config.home_config = home_right_leader if leader_side == "right" else home_config
     leader.config.time_to_home = args.time_to_home
 leader.wait_until_ready()
 
@@ -188,46 +204,6 @@ leader_gripper.disable_torque()
 # %% Prepare the dataset
 features = get_features(env)
 
-if args.resume:
-    print(f"[green]Resuming recording from existing dataset: {args.repo_id}")
-    dataset = LeRobotDataset(repo_id=args.repo_id)
-    if args.num_episodes <= dataset.num_episodes:
-        print(
-            f"[yellow] The dataset already has {dataset.num_episodes} recorded. Please select a larger number.[/yellow]"
-        )
-        exit()
-else:
-    print(f"[green]Creating new dataset: {args.repo_id}")
-    # Clean up existing dataset if it exists
-    if Path(HF_LEROBOT_HOME / args.repo_id).exists():
-        print(
-            "[yellow]WARNING: The repo_id already exists. If you decide to continue, you will overwrite the content. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise press <Enter> to continue."
-        )
-        input()
-        shutil.rmtree(HF_LEROBOT_HOME / args.repo_id)
-    dataset = LeRobotDataset.create(
-        repo_id=args.repo_id,
-        fps=args.fps,
-        robot_type=args.robot_type,
-        features=features,
-        use_videos=False,
-    )
-
-# %% Prepare environment and leader
-env.home()
-env.reset()
-
-leader.home()
-leader.cartesian_controller_parameters_client.load_param_config(
-    file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
-)
-leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
-
-start_episode_number = dataset.num_episodes
-
-# %% Start interaction
-previous_pose = leader.end_effector_pose
-
 if args.recording_manager_type == "keyboard":
     reconding_manager_cls = KeyboardRecordingManager
 elif args.recording_manager_type == "ros":
@@ -238,20 +214,61 @@ else:
         "Currently only 'keyboard' and 'ros' are supported."
     )
 
-with reconding_manager_cls(
-    num_episodes=args.num_episodes - start_episode_number
-) as recording_manager:
+recording_manager = reconding_manager_cls(
+    features=features,
+    repo_id=args.repo_id,
+    task=args.task,
+    robot_type=args.robot_type,
+    num_episodes=args.num_episodes,
+    fps=args.fps,
+    resume=args.resume,
+)
+
+logging.info("Waiting for dataset writer process to get ready...")
+try:
+    recording_manager.dataset_ready.wait()
+except KeyboardInterrupt:
+    logging.error("KeyboardInterrupt received. Exiting...")
+    exit()
+
+if not recording_manager.episode_count_queue.empty():
+    recording_manager.episode_count = recording_manager.episode_count_queue.get()
+
+
+logging.info("[green]Dataset writer process is ready.", extra={"markup": True})
+
+logging.info("Homing both robots before starting with recording.")
+
+# %% Prepare environment and leader
+env.home()
+env.reset()
+
+leader.home()
+leader.cartesian_controller_parameters_client.load_param_config(
+    file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
+)
+leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+leader_gripper.disable_torque()
+
+start_episode_number = recording_manager.episode_count
+
+# %% Start interaction
+previous_pose = leader.end_effector_pose
+
+
+with recording_manager:
     while not recording_manager == "exit":
-        print(
-            f"[magenta bold]=== Episode {recording_manager.episode_count + 1 + start_episode_number} / {recording_manager.num_episodes + start_episode_number} ==="
+        logging.info(
+            f"[magenta bold]=== Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes} ===",
+            extra={"markup": True},
         )
 
         if recording_manager.state == "is_waiting":
-            print("[magenta]Waiting for user to start.")
+            logging.info("[magenta]Waiting for user to start.", extra={"markup": True})
             while recording_manager.state == "is_waiting":
                 time.sleep(0.05)
 
-        print("[blue]Started episode")
+        logging.info("[blue]Started episode", extra={"markup": True})
 
         start_time = time.time()
         is_first_step = True
@@ -265,6 +282,7 @@ with reconding_manager_cls(
             file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
         )
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+        # leader_gripper.disable_torque()
 
         env.reset()
 
@@ -273,82 +291,44 @@ with reconding_manager_cls(
 
             if is_first_step:
                 previous_pose = leader.end_effector_pose
-                # TODO: @danielsanjosepro make this steps clearer to the user
-                obs, _, _, _, _ = env.step(
-                    action=np.concatenate(
-                        [
-                            np.zeros(6),
-                            [
-                                np.clip(
-                                    leader_gripper.value
-                                    if leader_gripper.value is not None
-                                    else 0.0,
-                                    0.0,
-                                    1.0,
-                                )
-                            ],
-                        ]
-                    ),
-                    block=False,
-                )
 
                 sleep_time = 1 / args.fps - (time.time() - step_time_init)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+                time.sleep(sleep_time)
 
                 is_first_step = False
                 continue
-
-            # print("Actual time is: ", time.time() - start_time)
-            # print("Step time is: ", env.timestep * 1 / 30)
-
-            # TODO: @danielsanjosepro make this steps clearer to the user
             action_pose = leader.end_effector_pose - previous_pose
             previous_pose = leader.end_effector_pose
+
+            gripper_value = env.gripper.value + np.clip(
+                leader_gripper.value - env.gripper.value, -0.5, 0.5
+            )
 
             action = np.concatenate(
                 [
                     action_pose.position,
                     action_pose.orientation.as_euler("xyz"),
-                    np.array(
-                        [
-                            np.clip(
-                                leader_gripper.value if leader_gripper.value is not None else 0.0,
-                                a_min=0.0,
-                                a_max=1.0,
-                            )
-                        ]
-                    ),
+                    [gripper_value],
                 ]
             )
 
-            # TODO: @danielsanjosepro or @maxdoesch make this saving in dict format more elegant
-            action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
-            obs_dict = {
-                dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
-                for i, dim in enumerate(features["observation.state"]["names"])
-            }
-            cam_frame = {
-                f"observation.images.{camera.config.camera_name}": obs[
-                    f"{camera.config.camera_name}_image"
-                ]
-                for camera in env.cameras
-            }
-            action_frame = build_dataset_frame(features, action_dict, prefix="action")
-            obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
-
-            frame = {**obs_frame, **action_frame, **cam_frame}
-            dataset.add_frame(frame, task=args.task)
-
             obs, _, _, _, _ = env.step(action, block=False)
+
+            recording_manager.queue.put({"type": "FRAME", "data": (obs, action)})
 
             sleep_time = 1 / args.fps - (time.time() - step_time_init)
             if sleep_time > 0:
                 time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+            else:
+                leader.node.get_logger().warning(
+                    f"CONTROL LOOP IS TOO SLOW. It took {-sleep_time} longer, current fps: {1.0 / (time.time() - step_time_init)}",
+                    throttle_duration_sec=1.0,
+                )
 
         if recording_manager.state == "paused":
-            print(
-                "[blue]Stopped episode. Waiting for user to decide whether to save or delete the episode"
+            logging.info(
+                "[blue]Stopped episode. Waiting for user to decide whether to save or delete the episode",
+                extra={"markup": True},
             )
             # Start homing for both robots
             leader.home(blocking=False)
@@ -358,30 +338,28 @@ with reconding_manager_cls(
             time.sleep(1.0)
 
         if recording_manager.state == "to_be_saved":
-            print("[green]Saving episode.")
-            dataset.save_episode()
-            recording_manager.episode_count += 1
-            recording_manager.set_to_wait()
+            recording_manager.save_episode()
 
         if recording_manager.state == "to_be_deleted":
-            print("[red]Deleting episode")
-            dataset.clear_episode_buffer()
-            recording_manager.set_to_wait()
+            recording_manager.delete_episode()
 
         if recording_manager.state == "exit":
             break
 
 if args.not_push_to_hub:
-    print(
-        "[green]Not pushing dataset to Hugging Face Hub. Use --not-push-to-hub to skip this step."
+    logging.info(
+        "[green]Not pushing dataset to Hugging Face Hub. Use --not-push-to-hub to skip this step.",
+        extra={"markup": True},
     )
-    # dataset.push_to_hub(repo_id=args.repo_id, private=True)
 else:
-    print(f"[green]Pushing dataset to Hugging Face Hub with repo_id: {args.repo_id}")
-    dataset.push_to_hub(repo_id=args.repo_id, private=True)
+    recording_manager.push_to_hub()
+
+recording_manager.shutdown()
+
+logging.info("Homing both robots and closing the environment.")
 
 leader.home()
-leader.shutdown()
-
 env.home()
+
+leader.shutdown()
 env.close()
