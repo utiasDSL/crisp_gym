@@ -1,6 +1,6 @@
 """General manipulator environments."""
 
-import threading
+import os
 from typing import Any, List, Optional, Tuple
 
 import gymnasium as gym
@@ -10,7 +10,6 @@ from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
 from numpy.typing import NDArray
-from rclpy.executors import MultiThreadedExecutor
 from scipy.spatial.transform import Rotation
 
 from crisp_gym.manipulator_env_config import FrankaEnvConfig, ManipulatorEnvConfig
@@ -36,32 +35,47 @@ class ManipulatorBaseEnv(gym.Env):
         if not rclpy.ok():
             rclpy.init()
 
-        self.node = rclpy.create_node("env_node", namespace=namespace)
-
         self.robot = Robot(
-            node=self.node,
             namespace=namespace,
             robot_config=self.config.robot_config,
-            spin_node=False,
         )
         self.gripper = Gripper(
-            node=self.node,
             namespace=namespace,
             gripper_config=self.config.gripper_config,
-            spin_node=False,
         )
         self.cameras = [
             Camera(
-                # node=self.node,
                 namespace=namespace,
                 config=camera_config,
-                # spin_node=False,
             )
             for camera_config in self.config.camera_configs
         ]
 
         self.timestep = 0
         self.ctrl_type = None
+
+        self.robot.wait_until_ready(timeout=3)
+        if self.config.gripper_enabled:
+            self.gripper.wait_until_ready(timeout=3)
+        for camera in self.cameras:
+            camera.wait_until_ready(timeout=3)
+
+        if self.config.cartesian_control_param_config:
+            if not os.path.exists(self.config.cartesian_control_param_config):
+                raise FileNotFoundError(
+                    f"Cartesian control parameter config file not found: {self.config.cartesian_control_param_config}"
+                )
+            self.robot.cartesian_controller_parameters_client.load_param_config(
+                file_path=self.config.cartesian_control_param_config
+            )
+        if self.config.joint_control_param_config:
+            if not os.path.exists(self.config.joint_control_param_config):
+                raise FileNotFoundError(
+                    f"Joint control parameter config file not found: {self.config.joint_control_param_config}"
+                )
+            self.robot.joint_controller_parameters_client.load_param_config(
+                file_path=self.config.joint_control_param_config
+            )
 
         self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
 
@@ -92,21 +106,6 @@ class ManipulatorBaseEnv(gym.Env):
                 ),
             }
         )
-
-        threading.Thread(target=self._spin_node, daemon=True).start()
-
-    def wait_until_ready(self):
-        """Wait until the robot is ready."""
-        self.robot.wait_until_ready(3.0)
-        self.gripper.wait_until_ready(3.0)
-        for camera in self.cameras:
-            camera.wait_until_ready(3.0)
-
-    def _spin_node(self):
-        executor = MultiThreadedExecutor(num_threads=6)
-        executor.add_node(self.node)
-        while rclpy.ok():
-            executor.spin_once(timeout_sec=0.1)
 
     def _get_obs(self) -> dict:
         """Retrieve the current observation from the robot.
@@ -413,7 +412,8 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         )
         # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
-        target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
+        # target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
+        target_joint = self.robot.target_joint + action[:7]
 
         self.robot.set_target_joint(target_joint)
 

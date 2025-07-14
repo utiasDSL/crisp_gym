@@ -30,7 +30,6 @@ class RecordingManager(ABC):
         self,
         features: dict,
         repo_id: str,
-        task: str,
         robot_type: str = "Franka",
         resume: bool = False,
         fps: int = 30,
@@ -41,7 +40,6 @@ class RecordingManager(ABC):
         Args:
             features: The features to record.
             repo_id: The repository ID for the dataset.
-            task: The task for which the dataset is being recorded.
             robot_type: The type of robot (default is "Franka").
             resume: Whether to resume from an existing dataset (default is False).
             fps: Frames per second for the dataset (default is 30).
@@ -54,7 +52,6 @@ class RecordingManager(ABC):
 
         self.features = features
         self.repo_id = repo_id
-        self.task = task
         self.robot_type = robot_type
         self.resume = resume
         self.fps = fps
@@ -123,7 +120,7 @@ class RecordingManager(ABC):
                 mtype = msg["type"]
 
                 if mtype == "FRAME":
-                    obs, action = msg["data"]
+                    obs, action, task = msg["data"]
 
                     logging.debug(f"Received frame with action: {action} and obs: {obs}")
 
@@ -154,7 +151,7 @@ class RecordingManager(ABC):
                         **cam_frame,
                     }
 
-                    dataset.add_frame(frame, task=self.task)
+                    dataset.add_frame(frame, task=task)
 
                 elif mtype == "SAVE_EPISODE":
                     dataset.save_episode()

@@ -8,14 +8,13 @@ import PIL.Image  # noqa: F401
 import logging
 
 from crisp_py.gripper import Gripper, GripperConfig
-from crisp_py.camera import CameraConfig
 from crisp_py.robot import Robot
 import numpy as np
 from rich.logging import RichHandler
 
 import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv, ManipulatorJointEnv
 from crisp_gym.manipulator_env_config import AlohaFrankaEnvConfig
 from crisp_gym.record.recording_manager import (
     KeyboardRecordingManager,
@@ -33,10 +32,11 @@ parser.add_argument(
     help="Repository ID for the dataset",
 )
 parser.add_argument(
-    "--task",
+    "--tasks",
     type=str,
-    default="pick the lego block.",
-    help="Task description",
+    nargs="+",
+    default=["pick the lego block."],
+    help="List of task descriptions to record data for, e.g. 'clean red' 'clean green'",
 )
 parser.add_argument(
     "--robot-type",
@@ -59,18 +59,19 @@ parser.add_argument(
 parser.add_argument(
     "--num-episodes",
     type=int,
-    default=1,
+    default=10,
     help="Number of episodes to record",
 )
 parser.add_argument(
     "--resume",
-    # type=bool,
     action="store_true",
+    default=False,
     help="Resume recording of an already existing dataset",
 )
 parser.add_argument(
-    "--not-push-to-hub",
-    action="store_true",
+    "--push-to-hub",
+    action=argparse.BooleanOptionalAction,
+    default=True,
     help="Whether to push the dataset to the Hugging Face Hub.",
 )
 parser.add_argument(
@@ -90,6 +91,12 @@ parser.add_argument(
     type=float,
     default=3.0,
     help="Time needed to home.",
+)
+parser.add_argument(
+    "--gripper-max-delta",
+    type=float,
+    default=0.3,
+    help="Maximum delta for the gripper value during recording.",
 )
 parser.add_argument(
     "--recording-manager-type",
@@ -112,13 +119,11 @@ parser.add_argument(
 # TODO: @maxdoesch add this
 parser.add_argument(
     "--joint-control",
-    type=bool,
-    default=False,
+    action="store_true",
     help="Whether to use joint control for the robot.",
 )
 
 args = parser.parse_args()
-
 
 # TODO: find a fix solution for this
 home_config = [
@@ -163,23 +168,18 @@ gripper_config = GripperConfig.from_yaml(
 gripper_config.joint_state_topic = "gripper" + "/" + gripper_config.joint_state_topic
 gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
 
+ctrl_type = "cartesian" if not args.joint_control else "joint"
+
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
-if args.leader_side == "right":
-    env_config.camera_configs = [
-        CameraConfig(
-            camera_name="wrist",
-            camera_frame="wrist_link",
-            resolution=(256, 256),
-            camera_color_image_topic="left_wrist_camera/color/image_rect_raw",
-            camera_color_info_topic="left_wrist_camera/color/camera_info",
-        ),
-    ]
+env_config.control_frequency = args.fps
 if args.use_close_home:
     env_config.robot_config.home_config = home_config
     env_config.robot_config.time_to_home = args.time_to_home
-
-env = ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
-env.wait_until_ready()
+env = (
+    ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+    if ctrl_type == "cartesian"
+    else ManipulatorJointEnv(namespace=follower_side, config=env_config)
+)
 
 # %% Prepare the Leader
 leader = Robot(namespace=leader_side)
@@ -202,7 +202,7 @@ leader_gripper.wait_until_ready()
 leader_gripper.disable_torque()
 
 # %% Prepare the dataset
-features = get_features(env)
+features = get_features(env, ctrl_type=ctrl_type)
 
 if args.recording_manager_type == "keyboard":
     reconding_manager_cls = KeyboardRecordingManager
@@ -217,7 +217,6 @@ else:
 recording_manager = reconding_manager_cls(
     features=features,
     repo_id=args.repo_id,
-    task=args.task,
     robot_type=args.robot_type,
     num_episodes=args.num_episodes,
     fps=args.fps,
@@ -250,11 +249,11 @@ leader.cartesian_controller_parameters_client.load_param_config(
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 leader_gripper.disable_torque()
 
-start_episode_number = recording_manager.episode_count
+tasks = list(args.tasks)
 
 # %% Start interaction
 previous_pose = leader.end_effector_pose
-
+previous_joint = leader.joint_values
 
 with recording_manager:
     while not recording_manager == "exit":
@@ -262,6 +261,8 @@ with recording_manager:
             f"[magenta bold]=== Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes} ===",
             extra={"markup": True},
         )
+        task = tasks[np.random.randint(0, len(tasks))]
+        logging.info(f"[magenta bold]=== Task: [italic]{task}[/italic] ===", extra={"markup": True})
 
         if recording_manager.state == "is_waiting":
             logging.info("[magenta]Waiting for user to start.", extra={"markup": True})
@@ -277,6 +278,7 @@ with recording_manager:
         # HACK: be sure that this one is running. Maybe the controller failed during recording so we need
         # to set the parameters again.
         # Reset before starting
+        env.reset()
         leader.reset_targets()
         leader.cartesian_controller_parameters_client.load_param_config(
             file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
@@ -284,41 +286,46 @@ with recording_manager:
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
         # leader_gripper.disable_torque()
 
-        env.reset()
-
         while recording_manager.state == "recording":
             step_time_init = time.time()
 
             if is_first_step:
                 previous_pose = leader.end_effector_pose
+                previous_joint = leader.joint_values
 
                 sleep_time = 1 / args.fps - (time.time() - step_time_init)
                 time.sleep(sleep_time)
 
                 is_first_step = False
                 continue
+
             action_pose = leader.end_effector_pose - previous_pose
+            action_joint = leader.joint_values - previous_joint
             previous_pose = leader.end_effector_pose
+            previous_joint = leader.joint_values
 
             gripper_value = env.gripper.value + np.clip(
-                leader_gripper.value - env.gripper.value, -0.5, 0.5
+                leader_gripper.value - env.gripper.value,
+                -args.gripper_max_delta,
+                args.gripper_max_delta,
             )
 
             action = np.concatenate(
                 [
-                    action_pose.position,
-                    action_pose.orientation.as_euler("xyz"),
+                    list(action_pose.position) + list(action_pose.orientation.as_euler("xyz"))
+                    if ctrl_type == "cartesian"
+                    else list(action_joint),
                     [gripper_value],
                 ]
             )
 
-            obs, _, _, _, _ = env.step(action, block=False)
+            obs, *_ = env.step(action, block=False)
 
-            recording_manager.queue.put({"type": "FRAME", "data": (obs, action)})
+            recording_manager.queue.put({"type": "DATA", "msg": (obs, action, task)})
 
             sleep_time = 1 / args.fps - (time.time() - step_time_init)
             if sleep_time > 0:
-                time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+                time.sleep(sleep_time)
             else:
                 leader.node.get_logger().warning(
                     f"CONTROL LOOP IS TOO SLOW. It took {-sleep_time} longer, current fps: {1.0 / (time.time() - step_time_init)}",
@@ -346,11 +353,8 @@ with recording_manager:
         if recording_manager.state == "exit":
             break
 
-if args.not_push_to_hub:
-    logging.info(
-        "[green]Not pushing dataset to Hugging Face Hub. Use --not-push-to-hub to skip this step.",
-        extra={"markup": True},
-    )
+if not args.push_to_hub:
+    print("[green]Not pushing dataset to Hugging Face Hub. Use --no-push-to-hub to skip this step.")
 else:
     recording_manager.push_to_hub()
 
