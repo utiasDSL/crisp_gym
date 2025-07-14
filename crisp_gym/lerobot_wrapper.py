@@ -7,12 +7,20 @@ from lerobot.common.datasets.lerobot_dataset import CODEBASE_VERSION
 from crisp_gym.manipulator_env import ManipulatorBaseEnv
 
 
-def get_features(env: ManipulatorBaseEnv) -> Dict[str, Dict]:
+def get_features(env: ManipulatorBaseEnv, ctrl_type: str = 'cartesian') -> Dict[str, Dict]:
     """Get the features used by LeRobotDataset."""
     if not CODEBASE_VERSION.startswith("v2"):
         print(
             "WARNING: this function has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
         )
+
+    ctrl_dims = {
+        'joint': [f"joint_{idx}" for idx in range(7)] + ["gripper"],
+        'cartesian': ["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+    }
+
+    if ctrl_type not in ctrl_dims:
+        raise ValueError(f"Control type {ctrl_type} not supported. Supported types: {list(ctrl_dims.keys())}")
 
     features = {}
     for cam in env.cameras:
@@ -24,22 +32,19 @@ def get_features(env: ManipulatorBaseEnv) -> Dict[str, Dict]:
             "names": ["height", "width", "channels"],
         }
 
-    # joint_dims = [f"joint_{idx}" for idx in range(7)] + ["gripper"]
-    cartesian_dims = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
-
     # Propioceptive
     # Feature configuration
     features["observation.state"] = {
         "dtype": "float32",
-        "shape": (len(cartesian_dims),),
-        "names": cartesian_dims,  # TODO: deal with other types
+        "shape": (len(ctrl_dims[ctrl_type]),),
+        "names": ctrl_dims[ctrl_type]
     }
 
     # Action
     features["action"] = {
         "dtype": "float32",
         "shape": env.action_space.shape,
-        "names": cartesian_dims,  # TODO: deal with other types
+        "names": ctrl_dims[ctrl_type],
     }
 
     # TODO: add further observations

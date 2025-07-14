@@ -1,32 +1,44 @@
 """General manipulator environment configs."""
-
+import os
 from dataclasses import dataclass, field
-from typing import List
+from pathlib import Path
+from typing import List, Optional
 
 from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
 from crisp_py.robot_config import FrankaConfig, RobotConfig
 
+CRISP_CONFIG_PATH = os.environ.get("CRISP_CONFIG_PATH")
+if CRISP_CONFIG_PATH is None:
+    raise EnvironmentError(
+        "Environment variable 'CRISP_CONFIG_PATH' is not set. Please run:\n"
+        "  export CRISP_CONFIG_PATH=/path/to/config"
+    )
+
+CRISP_CONFIG_PATH = Path(CRISP_CONFIG_PATH)
+
 
 @dataclass
 class ManipulatorEnvConfig:
-    """Manipulator Gym Environment Configuration.
-
-    This class is a configuration for the Manipulator Gym Environment.
-    It contains the robot and camera configurations.
-    """
+    """Manipulator Gym Environment Configuration."""
 
     control_frequency: float
-
     robot_config: RobotConfig
     gripper_config: GripperConfig
     camera_configs: List[CameraConfig]
 
-    gripper_enabled: bool = True
     gripper_threshold: float = 0.1
+    gripper_enabled: bool = True
     gripper_continous_control: bool = False
 
-    max_episode_steps: int | None = None
+    cartesian_control_param_config: Optional[Path] = field(
+        default_factory=lambda: CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
+    )
+    joint_control_param_config: Optional[Path] = field(
+        default_factory=lambda: CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
+    )
+
+    max_episode_steps: Optional[int] = None
 
 
 @dataclass
@@ -35,7 +47,7 @@ class FrankaEnvConfig(ManipulatorEnvConfig):
 
     control_frequency: float = 10.0
 
-    gripper_threshold: float = 0.05
+    gripper_threshold: float = 0.1
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
