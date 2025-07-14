@@ -19,7 +19,7 @@ def get_features(env: ManipulatorBaseEnv, ctrl_type: str = 'cartesian') -> Dict[
         'cartesian': ["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
     }
 
-    if not ctrl_type in ctrl_dims:
+    if ctrl_type not in ctrl_dims:
         raise ValueError(f"Control type {ctrl_type} not supported. Supported types: {list(ctrl_dims.keys())}")
 
     features = {}
