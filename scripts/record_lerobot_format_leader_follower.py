@@ -17,7 +17,7 @@ from rich import print
 
 import crisp_gym  # noqa: F401
 from crisp_gym.lerobot_wrapper import get_features
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv, ManipulatorJointEnv
 from crisp_gym.manipulator_env_config import AlohaFrankaEnvConfig
 from crisp_gym.record.recording_manager import (
     KeyboardRecordingManager,
@@ -33,10 +33,11 @@ parser.add_argument(
     help="Repository ID for the dataset",
 )
 parser.add_argument(
-    "--task",
+    "--tasks",
     type=str,
-    default="pick the lego block.",
-    help="Task description",
+    nargs="+",
+    default=["pick the lego block."],
+    help="List of task descriptions to record data for, e.g. 'clean red' 'clean green'",
 )
 parser.add_argument(
     "--robot-type",
@@ -59,18 +60,19 @@ parser.add_argument(
 parser.add_argument(
     "--num-episodes",
     type=int,
-    default=1,
+    default=10,
     help="Number of episodes to record",
 )
 parser.add_argument(
     "--resume",
-    # type=bool,
     action="store_true",
+    default=False,
     help="Resume recording of an already existing dataset",
 )
 parser.add_argument(
-    "--not-push-to-hub",
-    action="store_true",
+    "--push-to-hub",
+    action=argparse.BooleanOptionalAction,
+    default=True,
     help="Whether to push the dataset to the Hugging Face Hub.",
 )
 parser.add_argument(
@@ -112,13 +114,15 @@ parser.add_argument(
 # TODO: @maxdoesch add this
 parser.add_argument(
     "--joint-control",
-    type=bool,
-    default=False,
+    action="store_true",
     help="Whether to use joint control for the robot.",
 )
 
 args = parser.parse_args()
 
+# Clean up existing dataset if it exists
+if not args.resume and Path(HF_LEROBOT_HOME / args.repo_id).exists():
+    shutil.rmtree(HF_LEROBOT_HOME / args.repo_id)
 
 # TODO: find a fix solution for this
 home_config = [
@@ -159,11 +163,18 @@ gripper_config = GripperConfig.from_yaml(
 gripper_config.joint_state_topic = "gripper" + "/" + gripper_config.joint_state_topic
 gripper_config.command_topic = "gripper" + "/" + gripper_config.command_topic
 
+ctrl_type = "cartesian" if not args.joint_control else "joint"
+
 env_config = AlohaFrankaEnvConfig(gripper_config=gripper_config)
+env_config.control_frequency = args.fps
 if args.use_close_home:
     env_config.robot_config.home_config = home_config
     env_config.robot_config.time_to_home = args.time_to_home
-env = ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+env = (
+    ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+    if ctrl_type == "cartesian"
+    else ManipulatorJointEnv(namespace=follower_side, config=env_config)
+)
 
 # %% Prepare the Leader
 leader = Robot(namespace=leader_side)
@@ -186,7 +197,7 @@ leader_gripper.wait_until_ready()
 leader_gripper.disable_torque()
 
 # %% Prepare the dataset
-features = get_features(env)
+features = get_features(env, ctrl_type=ctrl_type)
 
 if args.resume:
     print(f"[green]Resuming recording from existing dataset: {args.repo_id}")
@@ -223,10 +234,13 @@ leader.cartesian_controller_parameters_client.load_param_config(
 )
 leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
-start_episode_number = dataset.num_episodes
+tasks = list(args.tasks)
 
 # %% Start interaction
 previous_pose = leader.end_effector_pose
+previous_joint = leader.joint_values
+
+start_episode_number = dataset.num_episodes
 
 if args.recording_manager_type == "keyboard":
     reconding_manager_cls = KeyboardRecordingManager
@@ -245,6 +259,8 @@ with reconding_manager_cls(
         print(
             f"[magenta bold]=== Episode {recording_manager.episode_count + 1 + start_episode_number} / {recording_manager.num_episodes + start_episode_number} ==="
         )
+        task = tasks[np.random.randint(0, len(tasks))]
+        print(f"[magenta bold]=== Task: [italic]{task}[/italic] ===")
 
         if recording_manager.state == "is_waiting":
             print("[magenta]Waiting for user to start.")
@@ -260,24 +276,22 @@ with reconding_manager_cls(
         # HACK: be sure that this one is running. Maybe the controller failed during recording so we need
         # to set the parameters again.
         # Reset before starting
+        env.reset()
         leader.reset_targets()
         leader.cartesian_controller_parameters_client.load_param_config(
             file_path=Path(path_to_config) / "control" / (args.leader_controller + ".yaml")
         )
         leader.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
-        env.reset()
-
         while recording_manager.state == "recording":
-            step_time_init = time.time()
-
             if is_first_step:
                 previous_pose = leader.end_effector_pose
+                previous_joint = leader.joint_values
                 # TODO: @danielsanjosepro make this steps clearer to the user
                 obs, _, _, _, _ = env.step(
                     action=np.concatenate(
                         [
-                            np.zeros(6),
+                            np.zeros(features["action"]["shape"][0] - 1),
                             [
                                 np.clip(
                                     leader_gripper.value
@@ -289,12 +303,8 @@ with reconding_manager_cls(
                             ],
                         ]
                     ),
-                    block=False,
+                    block=True,
                 )
-
-                sleep_time = 1 / args.fps - (time.time() - step_time_init)
-                if sleep_time > 0:
-                    time.sleep(sleep_time)  # Sleep to allow the environment to process the action
 
                 is_first_step = False
                 continue
@@ -304,12 +314,15 @@ with reconding_manager_cls(
 
             # TODO: @danielsanjosepro make this steps clearer to the user
             action_pose = leader.end_effector_pose - previous_pose
+            action_joint = leader.joint_values - previous_joint
             previous_pose = leader.end_effector_pose
+            previous_joint = leader.joint_values
 
             action = np.concatenate(
                 [
-                    action_pose.position,
-                    action_pose.orientation.as_euler("xyz"),
+                    list(action_pose.position) + list(action_pose.orientation.as_euler("xyz"))
+                    if ctrl_type == "cartesian"
+                    else list(action_joint),
                     np.array(
                         [
                             np.clip(
@@ -325,7 +338,9 @@ with reconding_manager_cls(
             # TODO: @danielsanjosepro or @maxdoesch make this saving in dict format more elegant
             action_dict = {dim: action[i] for i, dim in enumerate(features["action"]["names"])}
             obs_dict = {
-                dim: obs["cartesian"][i] if i < 6 else obs["gripper"][0]
+                dim: obs[ctrl_type][i]
+                if i < features["observation.state"]["shape"][0] - 1
+                else obs["gripper"][0]
                 for i, dim in enumerate(features["observation.state"]["names"])
             }
             cam_frame = {
@@ -338,13 +353,9 @@ with reconding_manager_cls(
             obs_frame = build_dataset_frame(features, obs_dict, prefix="observation.state")
 
             frame = {**obs_frame, **action_frame, **cam_frame}
-            dataset.add_frame(frame, task=args.task)
+            dataset.add_frame(frame, task=task)
 
-            obs, _, _, _, _ = env.step(action, block=False)
-
-            sleep_time = 1 / args.fps - (time.time() - step_time_init)
-            if sleep_time > 0:
-                time.sleep(sleep_time)  # Sleep to allow the environment to process the action
+            obs, _, _, _, _ = env.step(action, block=True)
 
         if recording_manager.state == "paused":
             print(
@@ -371,10 +382,8 @@ with reconding_manager_cls(
         if recording_manager.state == "exit":
             break
 
-if args.not_push_to_hub:
-    print(
-        "[green]Not pushing dataset to Hugging Face Hub. Use --not-push-to-hub to skip this step."
-    )
+if not args.push_to_hub:
+    print("[green]Not pushing dataset to Hugging Face Hub. Use --no-push-to-hub to skip this step.")
     # dataset.push_to_hub(repo_id=args.repo_id, private=True)
 else:
     print(f"[green]Pushing dataset to Hugging Face Hub with repo_id: {args.repo_id}")
