@@ -222,7 +222,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         if self.config.gripper_enabled:
             self.gripper.open()
-        self.robot.home(home_config, blocking)
+        self.robot.home(home_config=home_config, blocking=blocking)
 
         if not blocking:
             self.switch_controller(current_ctrl_type)
@@ -339,10 +339,6 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[6])
 
         if block:
-            if self.control_rate.time_until_next_call() < 0:
-                self.robot.node.get_logger().warn(
-                    f"Control rate is not being maintained by {-self.control_rate.time_until_next_call()} seconds."
-                )
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)

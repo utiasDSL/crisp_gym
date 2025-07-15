@@ -126,12 +126,12 @@ with RecordingManager(num_episodes=num_episodes) as recording_manager:
             print("[green]Saving episode.")
             dataset.save_episode()
             recording_manager.episode_count += 1
-            recording_manager.set_to_wait()
+            recording_manager._set_to_wait()
 
         if recording_manager.state == "to_be_deleted":
             print("[red]Deleting episode")
             dataset.clear_episode_buffer()
-            recording_manager.set_to_wait()
+            recording_manager._set_to_wait()
 
         if recording_manager.state == "exit":
             break

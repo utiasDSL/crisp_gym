@@ -3,9 +3,10 @@
 import logging
 import multiprocessing as mp
 import threading
+import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 import rclpy
 from lerobot.common.constants import HF_LEROBOT_HOME
@@ -13,14 +14,19 @@ from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.common.datasets.utils import build_dataset_frame
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
-from rich import print
-from rich.logging import RichHandler
-from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
-FORMAT = "%(message)s"
-logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+try:
+    from rich import print
+    from rich.logging import RichHandler
+    from rich.panel import Panel
+
+    FORMAT = "%(message)s"
+    logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+except ImportError:
+    FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    logging.basicConfig(level="INFO", format=FORMAT, datefmt="%Y-%m-%d %H:%M:%S")
 
 
 class RecordingManager(ABC):
@@ -34,6 +40,7 @@ class RecordingManager(ABC):
         resume: bool = False,
         fps: int = 30,
         num_episodes: int = 3,
+        push_to_hub: bool = False,
     ) -> None:
         """Initialize the recording manager.
 
@@ -44,7 +51,7 @@ class RecordingManager(ABC):
             resume: Whether to resume from an existing dataset (default is False).
             fps: Frames per second for the dataset (default is 30).
             num_episodes: Number of episodes to record (default is 3).
-
+            push_to_hub: Whether to push the dataset to Hugging Face Hub (default is False).
         """
         self.state: Literal[
             "is_waiting", "recording", "paused", "to_be_saved", "to_be_deleted", "exit"
@@ -56,11 +63,13 @@ class RecordingManager(ABC):
         self.resume = resume
         self.fps = fps
         self.num_episodes = num_episodes
+        self.push_to_hub = push_to_hub
         self.episode_count = 0
 
         self.queue = mp.JoinableQueue(16)
         self.episode_count_queue = mp.Queue(1)
         self.dataset_ready = mp.Event()
+
         # Start the writer process
         self.writer = mp.Process(
             target=self._writer_proc,
@@ -70,14 +79,34 @@ class RecordingManager(ABC):
         )
         self.writer.start()
 
+    def wait_until_ready(self) -> None:
+        """Wait until the dataset writer is ready."""
+        self.dataset_ready.wait()
+        self.update_episode_count()
+
+    def update_episode_count(self) -> None:
+        """Update the episode count from the queue.
+
+        This is useful when resuming from an existing dataset.
+        If the queue is empty, it will not change the episode count.
+        """
+        if not self.episode_count_queue.empty():
+            self.episode_count = self.episode_count_queue.get()
+
+    def done(self) -> bool:
+        """Return true if we are done recording."""
+        return self.state == "exit"
+
+    @abstractmethod
+    def get_instructions(self) -> str:
+        """Return the instructions to use the recording manager."""
+        raise NotImplementedError()
+
     def _create_dataset(self) -> LeRobotDataset:
         """Factory function to create a dataset object."""
-        logging.info("Creating dataset object.")
+        logging.debug("Creating dataset object.")
         if self.resume:
-            logging.info(
-                f"[green]Resuming recording from existing dataset: {self.repo_id}",
-                extra={"markup": True},
-            )
+            logging.info(f"Resuming recording from existing dataset: {self.repo_id}")
             dataset = LeRobotDataset(repo_id=self.repo_id)
             if self.num_episodes <= dataset.num_episodes:
                 logging.error(
@@ -161,70 +190,105 @@ class RecordingManager(ABC):
 
                 elif mtype == "PUSH_TO_HUB":
                     logging.info(
-                        "[green]Pushing dataset to Hugging Face Hub...", extra={"markup": True}
+                        "Pushing dataset to Hugging Face Hub...",
                     )
-                    dataset.push_to_hub(repo_id=self.repo_id, private=True)
-                    logging.info(
-                        "[green]Dataset pushed to Hugging Face Hub successfully.",
-                        extra={"markup": True},
-                    )
-
+                    try:
+                        dataset.push_to_hub(repo_id=self.repo_id, private=True)
+                        logging.info("Dataset pushed to Hugging Face Hub successfully.")
+                    except Exception as e:
+                        logging.error(
+                            f"Failed to push dataset to Hugging Face Hub: {e}",
+                            exc_info=True,
+                        )
                 elif mtype == "SHUTDOWN":
+                    logging.info("Shutting down writer process.")
                     break
             finally:
-                self.queue.task_done()
+                pass
 
-    def done(self) -> bool:
-        """Return true if we are done recording."""
-        return self.state == "exit"
+        self.queue.task_done()
+        logging.info("Writter process finished.")
 
-    def record(self, obs: dict, action: dict) -> None:
-        """Record a frame with the given observation and action.
+    def record_episode(
+        self,
+        data_fn: Callable[[], tuple[dict, dict]],
+        task: str,
+        on_start: Callable[[], None] | None = None,
+        on_end: Callable[[], None] | None = None,
+    ) -> None:
+        """Record a single episode from user-provided data function.
 
         Args:
-            obs: The observation dictionary.
-            action: The action dictionary.
+            data_fn: A function that returns (obs, action) at each step.
+            task: The task label for the episode.
+            on_start: Optional hook called at the start of the episode.
+            on_end: Optional hook called at the end (before save/delete).
         """
-        if self.state != "recording":
-            raise ValueError("Can not record if the state is not recording!")
-        self.queue.put({"type": "FRAME", "data": (obs, action)})
+        try:
+            self._wait_for_start_signal()
+        except StopIteration:
+            logging.info("Recording manager is shutting down.")
+            return
 
-    def delete_episode(self) -> None:
-        """Delete the current episode."""
-        if self.state != "to_be_deleted":
-            raise ValueError("Can not save episode if the state is not to be deleted!")
-        logging.info("[red]Deleting current episode.", extra={"markup": True})
+        if on_start:
+            on_start()
 
-        self.queue.put({"type": "DELETE_EPISODE"})
-        self.set_to_wait()
+        logging.info("Started recording episode.")
 
-    def save_episode(self) -> None:
-        """Save the current episode."""
-        if self.state != "to_be_saved":
-            raise ValueError("Can not save episode if the state is not paused!")
+        while self.state == "recording":
+            frame_start = time.time()
 
-        logging.info("[green]Saving current episode.", extra={"markup": True})
+            obs, action = data_fn()
+            if obs is None or action is None:
+                # If the data function returns None, skip this frame
+                sleep_time = 1 / self.fps - (time.time() - frame_start)
+                time.sleep(sleep_time)
+                continue
 
-        self.queue.put({"type": "SAVE_EPISODE"})
-        self.episode_count += 1
-        self.set_to_wait()
+            self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
-    def push_to_hub(self) -> None:
-        """Push the dataset to the Hugging Face Hub."""
-        if self.state != "exit":
-            raise ValueError("Can not push to hub if the state is not exit!")
-        self.queue.put({"type": "PUSH_TO_HUB"})
+            sleep_time = 1 / self.fps - (time.time() - frame_start)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            else:
+                logging.warning(
+                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS.",
+                    "Consider decreasing the FPS or optimizing the data function.",
+                )
 
-    def shutdown(self) -> None:
-        """Shutdown the recording manager."""
-        logging.info("[red]Shutting down recording manager.", extra={"markup": True})
-        self.queue.put({"type": "SHUTDOWN"})
-        self.writer.join()
+        if on_end:
+            on_end()
 
-    @abstractmethod
-    def get_instructions(self) -> str:
-        """Return the instructions to use the recording manager."""
-        raise NotImplementedError()
+        self._handle_post_episode()
+
+    def _wait_for_start_signal(self) -> None:
+        """Wait until the recording state is set to 'recording'."""
+        logging.info("Waiting to start recording...")
+        while self.state != "recording":
+            if self.state == "exit":
+                raise StopIteration
+            time.sleep(0.05)
+
+    def _handle_post_episode(self) -> None:
+        """Handle the state after recording an episode."""
+        if self.state == "paused":
+            logging.info("Paused. Awaiting user decision to save/delete...")
+            while self.state == "paused":
+                time.sleep(0.5)
+
+        if self.state == "to_be_saved":
+            logging.info("Saving current episode.")
+            self.queue.put({"type": "SAVE_EPISODE"})
+            self.episode_count += 1
+            self._set_to_wait()
+        elif self.state == "to_be_deleted":
+            logging.info("Deleting current episode.")
+            self.queue.put({"type": "DELETE_EPISODE"})
+            self._set_to_wait()
+        elif self.state == "exit":
+            pass
+        else:
+            logging.warning(f"Unexpected state after recording: {self.state}")
 
     def __enter__(self) -> "RecordingManager":  # noqa: D105
         """Enter the recording manager context."""
@@ -233,9 +297,18 @@ class RecordingManager(ABC):
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001, D105
         """Exit the recording manager."""
-        pass
+        if self.push_to_hub:
+            logging.info(
+                "Not pushing dataset to Hugging Face Hub. Use --no-push-to-hub to skip this step."
+            )
+        else:
+            self.queue.put({"type": "PUSH_TO_HUB"})
+        logging.info("Shutting down the record process...")
+        self.queue.put({"type": "SHUTDOWN"})
 
-    def set_to_wait(self) -> None:
+        self.writer.join()
+
+    def _set_to_wait(self) -> None:
         """Set to wait if possible."""
         if self.state not in ["to_be_saved", "to_be_deleted"]:
             raise ValueError("Can not go to wait state if the state is not to be saved or deleted!")
@@ -363,3 +436,4 @@ class KeyboardRecordingManager(RecordingManager):
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001, D105
         self.listener.stop()
+        super().__exit__(exc_type, exc_value, traceback)

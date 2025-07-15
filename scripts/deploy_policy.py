@@ -1,10 +1,13 @@
 """Script showcasing how to record data in Lerobot Format."""
 
-import argparse  # noqa: I001
-import PIL.Image  # noqa: F401
+import argparse
 import logging
+from typing import Callable  # noqa: I001
 
 import numpy as np
+import torch
+from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
+from lerobot.common.policies.pretrained import PreTrainedPolicy
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import (
@@ -12,17 +15,74 @@ from crisp_gym.config.home import (
 )
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import (
+    ManipulatorBaseEnv,
     ManipulatorCartesianEnv,
     ManipulatorJointEnv,
 )
 from crisp_gym.manipulator_env_config import make_env_config
-from crisp_gym.record.record_functions import make_teleop_fn
 from crisp_gym.record.recording_manager import (
     KeyboardRecordingManager,
     ROSRecordingManager,
 )
-from crisp_gym.teleop.teleop_robot import TeleopRobot
-from crisp_gym.teleop.teleop_robot_config import make_leader_config
+
+
+def make_policy_fn(env: ManipulatorBaseEnv, policy: PreTrainedPolicy) -> Callable:
+    """Create a function to apply a policy in the environment.
+
+    This function returns a Callable that, when invoked, observes the current state
+    of the environment, applies the given policy to determine the action, and steps
+    the environment with that action.
+
+    Args:
+        env (ManipulatorBaseEnv): The environment in which the policy will be applied.
+        policy (Callable): A Callable that takes an observation and returns an action.
+
+    Returns:
+        Callable: A function that, when called, performs a step in the environment
+        using the policy and returns the observation and action taken.
+    """
+
+    # WARNING: this is an example of a policy function that can be used with the recording manager. But is untested.
+    def _fn() -> tuple:
+        """Function to apply the policy in the environment.
+
+        This function observes the current state of the environment, applies the policy,
+        and steps the environment with the action returned by the policy.
+
+        Returns:
+            tuple: A tuple containing the observation from the environment and the action taken.
+        """
+        obs_raw = env._get_obs()
+        with torch.inference_mode(), torch.autocast(device_type="cuda"):
+            # Convert to pytorch format: channel first and float32 in [0,1] with batch dimension
+            obs = {}
+
+            # Propioceptive state
+            state = np.concatenate([obs_raw["cartesian"][:6], obs_raw["gripper"]])
+            obs = {"observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float()}
+
+            for cam in env.cameras:
+                img = obs_raw[f"{cam.config.camera_name}_image"]
+                obs[f"observation.images.{cam.config.camera_name}"] = (
+                    torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).cuda().float() / 255
+                )
+
+            obs["task"] = ""
+
+            # Compute the next action with the policy
+            # based on the current observation
+            action = policy.select_action(obs)
+
+            # Remove batch dimension
+            action = action.squeeze(0)
+
+            # Move to cpu, if not already the case
+            action = action.to("cpu")
+
+        return obs_raw, action
+
+    return _fn
+
 
 try:
     from rich.logging import RichHandler
@@ -39,13 +99,6 @@ parser.add_argument(
     type=str,
     default="franka_single",
     help="Repository ID for the dataset",
-)
-parser.add_argument(
-    "--tasks",
-    type=str,
-    nargs="+",
-    default=["pick the lego block."],
-    help="List of task descriptions to record data for, e.g. 'clean red' 'clean green'",
 )
 parser.add_argument(
     "--robot-type",
@@ -84,12 +137,6 @@ parser.add_argument(
     help="Type of recording manager to use. Currently only 'keyboard' and 'ros' are supported.",
 )
 parser.add_argument(
-    "--leader-side",
-    type=str,
-    default="left",
-    help="Side of the leader robot (left or right).",
-)
-parser.add_argument(
     "--time-to-home",
     type=float,
     default=3.0,
@@ -109,14 +156,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 # Set up the config for the environment
-if args.leader_side not in ["left", "right"]:
-    raise ValueError(
-        f"Invalid leader side: {args.leader_side}. It should be either 'left' or 'right'."
-    )
-
-leader_side = args.leader_side
-follower_side = "right" if leader_side == "left" else "left"
-
+follower_side = "right"
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 
 # %% Prepare the Follower Environment
@@ -131,18 +171,30 @@ env = (
     else ManipulatorJointEnv(namespace=follower_side, config=env_config)
 )
 
-# %% Prepare the Leader
-leader_config = make_leader_config(f"{leader_side}_{args.robot_type}")
-if args.use_close_home:
-    leader_config.leader.home_config = home_close_to_table
-    leader_config.leader.time_to_home = args.time_to_home
-
-leader = TeleopRobot(config=leader_config)
-
-leader.wait_until_ready()
-
 # %% Prepare the dataset
 features = get_features(env, ctrl_type=ctrl_type)
+
+# %% Prepare the policy
+device = "cuda" if torch.cuda.is_available() else "cpu"
+logging.info(f"Using device '{device}' for the policy inference.")
+policy = DiffusionPolicy.from_pretrained(
+    repo_id="lerobot/diffusion_policy_franka_single",
+    device=device,
+)
+policy.reset()
+policy.to(device).eval()
+
+# %% Warm up CUDA kernels
+warmup_obs = {"observation.state": torch.zeros((1, 7), device=device)}
+for cam in env.cameras:
+    warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
+        (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
+    )
+warmup_obs["task"] = "Pick up the lego block."
+
+with torch.inference_mode():
+    _ = policy.select_action(warmup_obs)
+    torch.cuda.synchronize()
 
 if args.recording_manager_type == "keyboard":
     reconding_manager_cls = KeyboardRecordingManager
@@ -164,14 +216,10 @@ recording_manager = reconding_manager_cls(
 )
 recording_manager.wait_until_ready()
 
-logging.info("Homing both robots before starting with recording.")
+logging.info("Homing robot before starting with recording.")
 
-# %% Prepare environment and leader
-leader.prepare_for_teleop()
 env.home()
 env.reset()
-
-tasks = list(args.tasks)
 
 
 def on_start():
@@ -182,9 +230,7 @@ def on_start():
 def on_end():
     """Hook function to be called when stopping the recording."""
     env.robot.reset_targets()
-    env.home(blocking=False)
-    leader.robot.reset_targets()
-    leader.prepare_for_teleop(blocking=False)
+    env.home(blocking=True)
 
 
 with recording_manager:
@@ -193,21 +239,15 @@ with recording_manager:
             f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
         )
 
-        if tasks:
-            task = tasks[np.random.randint(0, len(tasks))]
-            logging.info(f"▷ Task: {task}")
-
         recording_manager.record_episode(
-            data_fn=make_teleop_fn(env, leader),
-            task=task,
+            data_fn=make_policy_fn(env),
+            task="Pick up the lego block.",
             on_start=on_start,
             on_end=on_end,
         )
 
 
-logging.info("Homing leader.")
-leader.robot.home()
-logging.info("Homing follower.")
+logging.info("Homing robot.")
 env.home()
 
 logging.info("Closing the environment.")
