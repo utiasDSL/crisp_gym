@@ -273,7 +273,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
-        super().__init__(namespace, config)
+        super().__init__(namespace=namespace, config=config)
 
         self._min_z_height = 0.0
 
