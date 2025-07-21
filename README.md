@@ -1,4 +1,4 @@
-# CRISP Gym
+![crisp_gym](media/crisp_gym_logo.png)
 
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 ![MIT Badge](https://img.shields.io/badge/MIT-License-blue?style=flat)
@@ -8,3 +8,4 @@
 This repository contains all environments for to train policies using the *crisp_gym* as a backbone.
 
 The installation steps are similar to [crisp_py](https://github.com/utiasDSL/crisp_py/tree/feat-ruff-check?tab=readme-ov-file#git-installation-with-pixi) installation.
+
