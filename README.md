@@ -5,7 +5,7 @@
 <a href="https://github.com/utiasDSL/crisp_gym/actions/workflows/ruff_ci.yml"><img src="https://github.com/utiasDSL/crisp_gym/actions/workflows/ruff_ci.yml/badge.svg"/></a>
 <a href="https://github.com/utiasDSL/crisp_gym/actions/workflows/pixi_ci.yml"><img src="https://github.com/utiasDSL/crisp_gym/actions/workflows/pixi_ci.yml/badge.svg"/></a>
 
-This repository contains all environments for to train policies using the *crisp_gym* as a backbone.
+This repository contains Gymnasium environments to train and deploy high-level learning-based policies using [CRISP_PY](https://github.com/utiasDSL/crisp_py) and the [CRISP controllers](https://github.com/utiasDSL/crisp_controllers).
 
-The installation steps are equal to [crisp_py](https://github.com/utiasDSL/crisp_py/tree/feat-ruff-check?tab=readme-ov-file#git-installation-with-pixi) installation.
+The installation steps are equal to [CRISP_PY](https://github.com/utiasDSL/crisp_py/tree/feat-ruff-check?tab=readme-ov-file#git-installation-with-pixi) installation.
 
