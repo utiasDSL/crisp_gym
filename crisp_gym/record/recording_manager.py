@@ -9,9 +9,9 @@ from pathlib import Path
 from typing import Callable, Literal
 
 import rclpy
-from lerobot.common.constants import HF_LEROBOT_HOME
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.common.datasets.utils import build_dataset_frame
+from lerobot.constants import HF_LEROBOT_HOME
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets.utils import build_dataset_frame
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from std_msgs.msg import String
@@ -25,6 +25,7 @@ try:
     FORMAT = "%(message)s"
     logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 except ImportError:
+    print = print  # type: ignore
     FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     logging.basicConfig(level="INFO", format=FORMAT, datefmt="%Y-%m-%d %H:%M:%S")
 
