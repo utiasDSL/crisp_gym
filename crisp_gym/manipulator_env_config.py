@@ -10,14 +10,7 @@ from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
 from crisp_py.robot_config import FrankaConfig, RobotConfig
 
-CRISP_CONFIG_PATH = os.environ.get("CRISP_CONFIG_PATH")
-if CRISP_CONFIG_PATH is None:
-    raise EnvironmentError(
-        "Environment variable 'CRISP_CONFIG_PATH' is not set. Please run:\n"
-        "  export CRISP_CONFIG_PATH=/path/to/config"
-    )
-
-CRISP_CONFIG_PATH = Path(CRISP_CONFIG_PATH)
+from crisp_gym.config.path import CRISP_CONFIG_PATH
 
 
 @dataclass
@@ -26,21 +19,21 @@ class ManipulatorEnvConfig(ABC):
 
     control_frequency: float
     robot_config: RobotConfig
-    gripper_config: GripperConfig
+    gripper_config: GripperConfig | None
     camera_configs: List[CameraConfig]
 
     gripper_threshold: float = 0.1
     gripper_enabled: bool = True
     gripper_continous_control: bool = False
 
-    cartesian_control_param_config: Optional[Path] = field(
+    cartesian_control_param_config: Path | None = field(
         default_factory=lambda: CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
     )
-    joint_control_param_config: Optional[Path] = field(
+    joint_control_param_config: Path | None = field(
         default_factory=lambda: CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
     )
 
-    max_episode_steps: Optional[int] = None
+    max_episode_steps: int | None = None
 
 
 @dataclass
@@ -53,7 +46,7 @@ class FrankaEnvConfig(ManipulatorEnvConfig):
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig(
             min_value=0,
             max_value=1,
@@ -98,7 +91,7 @@ class NoCamFrankaEnvConfig(ManipulatorEnvConfig):
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig(min_value=0, max_value=1)
     )
 
@@ -113,7 +106,7 @@ class LeftNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 
     gripper_enabled: bool = True
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / ("gripper_left.yaml")).resolve()
         )
@@ -126,7 +119,7 @@ class RightNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 
     gripper_enabled: bool = True
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / ("gripper_right.yaml")).resolve()
         )
@@ -144,7 +137,7 @@ class OnlyWristCamFrankaEnvConfig(ManipulatorEnvConfig):
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig(
             min_value=0,
             max_value=1,
@@ -181,7 +174,7 @@ class AlohaFrankaEnvConfig(ManipulatorEnvConfig):
     gripper_continous_control: bool = True
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / ("gripper_aloha.yaml")).resolve()
         )
@@ -195,7 +188,7 @@ class AlohaFrankaEnvConfig(ManipulatorEnvConfig):
 class LeftAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
     """Custom Franka Gym Environment Configuration for the left robot with an Aloha gripper and cameras."""
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / ("gripper_left.yaml")).resolve()
         )
@@ -225,7 +218,7 @@ class LeftAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
 class RightAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
     """Custom Franka Gym Environment Configuration for the right robot with an Aloha gripper and cameras."""
 
-    gripper_config: GripperConfig = field(
+    gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / ("gripper_right.yaml")).resolve()
         )
@@ -251,6 +244,24 @@ class RightAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
     )
 
 
+@dataclass
+class NoCamNoGripperFrankaEnvConfig(ManipulatorEnvConfig):
+    """Franka Gym Environment Configuration without cameras and gripper."""
+
+    control_frequency: float = 10.0
+
+    cartesian_control_param_config: Path | None = None
+    joint_control_param_config: Path | None = None
+
+    robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
+    gripper_config: GripperConfig | None = field(
+        default_factory=lambda: GripperConfig(min_value=0, max_value=1)
+    )
+    camera_configs: List[CameraConfig] = field(default_factory=lambda: [])
+
+    gripper_enabled: bool = False
+
+
 def make_env_config(
     env_type: str,
     control_frequency: float = 10.0,
@@ -261,16 +272,21 @@ def make_env_config(
         raise ValueError(
             f"Unsupported environment type: {env_type}, available types are {list(STRING_TO_CONFIG.keys())}."
         )
-
     return config_class(control_frequency=control_frequency)
 
 
+def list_env_configs() -> list[str]:
+    """List all available environment configurations."""
+    return list(STRING_TO_CONFIG.keys())
+
+
 STRING_TO_CONFIG = {
+    "right_aloha_franka": RightAlohaFrankaEnvConfig,
+    "left_aloha_franka": LeftAlohaFrankaEnvConfig,
     "franka": FrankaEnvConfig,
     "no_cam_franka": NoCamFrankaEnvConfig,
     "left_no_cam_franka": LeftNoCamFrankaEnvConfig,
     "right_no_cam_franka": RightNoCamFrankaEnvConfig,
     "only_wrist_cam_franka": OnlyWristCamFrankaEnvConfig,
-    "left_aloha_franka": LeftAlohaFrankaEnvConfig,
-    "right_aloha_franka": RightAlohaFrankaEnvConfig,
+    "no_cam_no_gripper_franka": NoCamNoGripperFrankaEnvConfig,
 }
