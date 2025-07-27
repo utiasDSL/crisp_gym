@@ -31,7 +31,7 @@ class TeleopRobotConfig(ABC):
     """
 
     leader: RobotConfig
-    leader_gripper: GripperConfig
+    leader_gripper: GripperConfig | None
 
     gravity_compensation_controller: Path
 
@@ -46,7 +46,7 @@ class LeftAlohaFrankaTeleopRobotConfig(TeleopRobotConfig):
     """Configuration for the left robot as a leader."""
 
     leader: RobotConfig = field(default_factory=lambda: FrankaConfig())
-    leader_gripper: GripperConfig = field(
+    leader_gripper: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / "trigger_left.yaml").resolve()
         )
@@ -79,6 +79,32 @@ class RightAlohaFrankaTeleopRobotConfig(TeleopRobotConfig):
     leader_gripper_namespace = "right/gripper"
 
 
+@dataclass
+class NoGripperTeleopRobotConfig(TeleopRobotConfig):
+    """Configuration for a teleoperation robot without a gripper."""
+
+    leader: RobotConfig = field(default_factory=lambda: FrankaConfig())
+    leader_gripper: GripperConfig | None = None
+
+    gravity_compensation_controller: Path = field(
+        default_factory=lambda: CRISP_CONFIG_PATH / "control" / "gravity_compensation.yaml"
+    )
+
+
+@dataclass
+class RightNoGripperTeleopRobotConfig(NoGripperTeleopRobotConfig):
+    """Configuration for a teleoperation robot without a gripper."""
+
+    leader_namespace: str = "right"
+
+
+@dataclass
+class LeftNoGripperTeleopRobotConfig(NoGripperTeleopRobotConfig):
+    """Configuration for a teleoperation robot without a gripper."""
+
+    leader_namespace: str = "left"
+
+
 def make_leader_config(
     name: str,
 ) -> TeleopRobotConfig:
@@ -91,7 +117,15 @@ def make_leader_config(
     return STRING_TO_CONFIG[name]()
 
 
+def list_leader_configs() -> list[str]:
+    """List all available leader robot configurations."""
+    return list(STRING_TO_CONFIG.keys())
+
+
 STRING_TO_CONFIG = {
     "left_aloha_franka": LeftAlohaFrankaTeleopRobotConfig,
     "right_aloha_franka": RightAlohaFrankaTeleopRobotConfig,
+    "no_gripper": NoGripperTeleopRobotConfig,
+    "right_no_gripper": RightNoGripperTeleopRobotConfig,
+    "left_no_gripper": LeftNoGripperTeleopRobotConfig,
 }
