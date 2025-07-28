@@ -23,7 +23,7 @@ class ManipulatorEnvConfig(ABC):
 
     gripper_threshold: float = 0.1
     gripper_enabled: bool = True
-    gripper_continous_control: bool = False
+    gripper_continuous_control: bool = False
 
     cartesian_control_param_config: Path | None = field(
         default_factory=lambda: CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
