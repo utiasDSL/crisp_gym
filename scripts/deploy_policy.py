@@ -2,15 +2,10 @@
 
 import argparse
 import logging
-import multiprocessing
 import time
-from multiprocessing import Pipe, Process, connection
-from multiprocessing.connection import Connection
-from typing import Callable  # noqa: I001
+from multiprocessing import Pipe, Process
 
-import numpy as np
-import torch
-from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
+from rich.logging import RichHandler
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import (
@@ -18,118 +13,16 @@ from crisp_gym.config.home import (
 )
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import (
-    ManipulatorBaseEnv,
     ManipulatorCartesianEnv,
     ManipulatorJointEnv,
 )
 from crisp_gym.manipulator_env_config import make_env_config
+from crisp_gym.record.record_functions import inference_worker, make_policy_fn
 from crisp_gym.record.recording_manager import (
     KeyboardRecordingManager,
     ROSRecordingManager,
 )
-
-from rich.logging import RichHandler
-
-
-def inference_worker(conn: Connection, policy_path: str, env: ManipulatorBaseEnv):  # noqa: ANN001
-    """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None."""
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    policy = DiffusionPolicy.from_pretrained(policy_path)
-    logging.info(
-        f"[Inference] Loaded policy from {policy_path} on device {device} with {policy.config.num_inference_steps} inference steps."
-    )
-    policy.reset()
-    policy.to(device).eval()
-
-    warmup_obs = {"observation.state": torch.zeros((1, 7), device=device), "task": ""}
-    for cam in env.cameras:
-        if cam.config.resolution is None:
-            raise ValueError(
-                f"Camera {cam.config.camera_name} does not have a resolution set. "
-                "Please set the resolution in the camera configuration."
-            )
-        warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
-            (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
-        )
-
-    with torch.inference_mode():
-        _ = policy.select_action(warmup_obs)
-        torch.cuda.synchronize()
-
-    logging.info("[Inference] Warm-up complete")
-
-    while True:
-        obs_raw = conn.recv()
-        if obs_raw is None:
-            break
-        if obs_raw == "reset":
-            logging.info("[Inference] Resetting policy")
-            policy.reset()
-            continue
-
-        with torch.inference_mode():
-            state = np.concatenate([obs_raw["cartesian"][:6], obs_raw["gripper"]])
-            obs = {
-                "observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float(),
-                "task": "",  # TODO: Add task description if needed
-            }
-            for cam in env.cameras:
-                img = obs_raw[f"{cam.config.camera_name}_image"]
-                obs[f"observation.images.{cam.config.camera_name}"] = (
-                    torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).cuda().float() / 255
-                )
-
-            action = policy.select_action(obs)
-
-        logging.debug(f"[Inference] Computed action: {action}")
-        conn.send(action)
-
-    conn.close()
-    logging.info("[Inference] Worker shutting down")
-
-
-def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable:
-    """Create a function to apply a policy in the environment using multiprocessing.
-
-    This function returns a Callable that, when invoked, observes the current state
-    of the environment, sends the observation to the inference worker via pipe,
-    receives the action, and steps the environment with that action.
-
-    Args:
-        env (ManipulatorBaseEnv): The environment in which the policy will be applied.
-        parent_conn (Connection): The connection to the inference worker for sending observations
-
-    Returns:
-        Callable: A function that, when called, performs a step in the environment
-        using the policy and returns the observation and action taken.
-    """
-
-    def _fn() -> tuple:
-        """Function to apply the policy in the environment.
-
-        This function observes the current state of the environment, sends the observation
-        to the inference worker, receives the action, and steps the environment.
-
-        Returns:
-            tuple: A tuple containing the observation from the environment and the action taken.
-        """
-        obs_raw = env._get_obs()
-
-        # Send observation to inference worker and receive action
-        parent_conn.send(obs_raw)
-        action = parent_conn.recv().squeeze(0).to("cpu").numpy()
-        logging.debug(f"Action: {action}")
-
-        try:
-            env.step(action, block=False)
-        except Exception as e:
-            logging.error(f"Error during environment step: {e}")
-
-        return obs_raw, action
-
-    return _fn
-
+from crisp_gym.util import prompt
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -147,7 +40,7 @@ parser.add_argument(
 parser.add_argument(
     "--fps",
     type=int,
-    default=20,
+    default=15,
     help="Frames per second for recording",
 )
 parser.add_argument(
@@ -197,6 +90,12 @@ parser.add_argument(
     choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
     help="Set the logging level.",
 )
+parser.add_argument(
+    "--path",
+    type=str,
+    default=None,
+    help="Path to save the recordings.",
+)
 
 args = parser.parse_args()
 
@@ -206,6 +105,25 @@ logging.basicConfig(level=args.log_level, format=FORMAT, datefmt="[%X]", handler
 logging.info("Arguments:")
 for arg, value in vars(args).items():
     logging.info(f"  {arg}: {value}")
+
+
+if args.path is None:
+    logging.info("No path provided, the available models are:")
+    from pathlib import Path
+
+    models_path = Path("outputs/models")
+    if models_path.exists() and models_path.is_dir():
+        models = [d.name for d in models_path.iterdir() if d.is_dir()]
+        args.path = models_path / prompt.prompt(
+            message="Please select a model to use for recording:",
+            options=models,
+            default=models[0] if models else None,
+        )
+        logging.info(f"Using model path: {args.path}")
+    else:
+        logging.error("'outputs/models' directory does not exist.")
+        logging.error("Please provide a valid path to the model using --path or create a new one.")
+        exit(1)
 
 # Set up the config for the environment
 follower_side = "right"
@@ -233,7 +151,7 @@ parent_conn, child_conn = Pipe()
 # Start inference process
 inf_proc = Process(
     target=inference_worker,
-    args=(child_conn, "outputs/models/pretrained_model", env),
+    args=(child_conn, args.path, env),
     daemon=True,
 )
 inf_proc.start()

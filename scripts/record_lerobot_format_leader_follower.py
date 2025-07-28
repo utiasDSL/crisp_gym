@@ -4,10 +4,8 @@ import argparse
 import logging
 
 import numpy as np
-import PIL.Image
 import rclpy  # noqa: F401
 from rich.logging import RichHandler
-from rich.prompt import Prompt
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import (

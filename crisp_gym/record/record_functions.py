@@ -5,12 +5,16 @@ This module should be used in conjunction with the `RecordingManager` class.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
-
+import torch
+from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 
 if TYPE_CHECKING:
+    from multiprocessing.connection import Connection
+
     from crisp_gym.manipulator_env import ManipulatorBaseEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
 
@@ -88,35 +92,107 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
     return _fn
 
 
-def make_policy_fn(env: ManipulatorBaseEnv, policy: Callable) -> Callable:
-    """Create a function to apply a policy in the environment.
+def inference_worker(conn: Connection, policy_path: str, env: ManipulatorBaseEnv):  # noqa: ANN001
+    """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
+
+    Args:
+        conn (Connection): The connection to the parent process for sending and receiving data.
+        policy_path (str): Path to the pretrained policy model.
+        env (ManipulatorBaseEnv): The environment in which the policy will be applied.
+    """
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    policy = DiffusionPolicy.from_pretrained(policy_path)
+    logging.info(
+        f"[Inference] Loaded policy from {policy_path} on device {device} with {policy.config.num_inference_steps} inference steps."
+    )
+    policy.reset()
+    policy.to(device).eval()
+
+    warmup_obs = {"observation.state": torch.zeros((1, 7), device=device), "task": ""}
+    for cam in env.cameras:
+        if cam.config.resolution is None:
+            raise ValueError(
+                f"Camera {cam.config.camera_name} does not have a resolution set. "
+                "Please set the resolution in the camera configuration."
+            )
+        warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
+            (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
+        )
+
+    with torch.inference_mode():
+        _ = policy.select_action(warmup_obs)
+        torch.cuda.synchronize()
+
+    logging.info("[Inference] Warm-up complete")
+
+    while True:
+        obs_raw = conn.recv()
+        if obs_raw is None:
+            break
+        if obs_raw == "reset":
+            logging.info("[Inference] Resetting policy")
+            policy.reset()
+            continue
+
+        with torch.inference_mode():
+            state = np.concatenate([obs_raw["cartesian"][:6], obs_raw["gripper"]])
+            obs = {
+                "observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float(),
+                "task": "",  # TODO: Add task description if needed
+            }
+            for cam in env.cameras:
+                img = obs_raw[f"{cam.config.camera_name}_image"]
+                obs[f"observation.images.{cam.config.camera_name}"] = (
+                    torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).cuda().float() / 255
+                )
+
+            action = policy.select_action(obs)
+
+        logging.debug(f"[Inference] Computed action: {action}")
+        conn.send(action)
+
+    conn.close()
+    logging.info("[Inference] Worker shutting down")
+
+
+def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable:
+    """Create a function to apply a policy in the environment using multiprocessing.
 
     This function returns a Callable that, when invoked, observes the current state
-    of the environment, applies the given policy to determine the action, and steps
-    the environment with that action.
+    of the environment, sends the observation to the inference worker via pipe,
+    receives the action, and steps the environment with that action.
 
     Args:
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
-        policy (Callable): A Callable that takes an observation and returns an action.
+        parent_conn (Connection): The connection to the inference worker for sending observations
 
     Returns:
         Callable: A function that, when called, performs a step in the environment
         using the policy and returns the observation and action taken.
     """
 
-    # WARNING: this is an example of a policy function that can be used with the recording manager. But is untested.
     def _fn() -> tuple:
         """Function to apply the policy in the environment.
 
-        This function observes the current state of the environment, applies the policy,
-        and steps the environment with the action returned by the policy.
+        This function observes the current state of the environment, sends the observation
+        to the inference worker, receives the action, and steps the environment.
 
         Returns:
             tuple: A tuple containing the observation from the environment and the action taken.
         """
-        obs = env._get_obs()
-        action = policy(obs)
-        env.step(action)
-        return obs, action
+        obs_raw = env._get_obs()
+
+        # Send observation to inference worker and receive action
+        parent_conn.send(obs_raw)
+        action = parent_conn.recv().squeeze(0).to("cpu").numpy()
+        logging.debug(f"Action: {action}")
+
+        try:
+            env.step(action, block=False)
+        except Exception as e:
+            logging.error(f"Error during environment step: {e}")
+
+        return obs_raw, action
 
     return _fn
