@@ -247,7 +247,7 @@ class RecordingManager(ABC):
                 time.sleep(sleep_time)
                 continue
 
-            logging.debug("Not writing frame")
+            self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
             sleep_time = 1 / self.fps - (time.time() - frame_start)
             if sleep_time > 0:
@@ -309,9 +309,7 @@ class RecordingManager(ABC):
             )
 
         if not self.push_to_hub:
-            logging.info(
-                "Not pushing dataset to Hugging Face Hub. Use --push-to-hub to not skip this step."
-            )
+            logging.info("Not pushing dataset to Hugging Face Hub.")
         else:
             self.queue.put({"type": "PUSH_TO_HUB"})
         logging.info("Shutting down the record process...")
@@ -344,6 +342,7 @@ class ROSRecordingManager(RecordingManager):
         self._subscriber = self.node.create_subscription(
             String, "record_transition", self._callback_recording_trigger, 10
         )
+        logging.debug("ROS2 node created and subscriber initialized.")
 
         threading.Thread(target=self._spin_node, daemon=True).start()
 
@@ -376,20 +375,29 @@ class ROSRecordingManager(RecordingManager):
             print("[yellow]Allowed actions are: record, save, delete, exit[/yellow]")
             return
 
+        logging.debug(f"Received message: {msg.data}")
+        logging.debug(f"Current state: {self.state}")
+
         if self.state == "is_waiting":
             if msg.data == "record":
+                logging.debug("Transitioning to recording state.")
                 self.state = "recording"
             if msg.data == "exit":
+                logging.debug("Transitioning to exit state.")
                 self.state = "exit"
         elif self.state == "recording":
             if msg.data == "record":
+                logging.debug("Transitioning to paused state.")
                 self.state = "paused"
         elif self.state == "paused":
             if msg.data == "exit":
+                logging.debug("Transitioning to exit state.")
                 self.state = "exit"
             if msg.data == "save":
+                logging.debug("Transitioning to to_be_saved state.")
                 self.state = "to_be_saved"
             if msg.data == "delete":
+                logging.debug("Transitioning to to_be_deleted state.")
                 self.state = "to_be_deleted"
 
 

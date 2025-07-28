@@ -11,6 +11,7 @@ import crisp_gym  # noqa: F401
 from crisp_gym.config.home import (
     home_close_to_table,
 )
+from crisp_gym.config.path import CRISP_CONFIG_PATH
 from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import (
     ManipulatorCartesianEnv,
@@ -52,7 +53,7 @@ parser.add_argument(
 parser.add_argument(
     "--fps",
     type=int,
-    default=20,
+    default=15,
     help="Frames per second for recording",
 )
 parser.add_argument(
@@ -132,14 +133,14 @@ for arg, value in vars(args).items():
 if args.follower_namespace is None:
     args.follower_namespace = prompt.prompt(
         "Please enter the follower robot namespace (e.g., 'left', 'right', ...)",
-        default="left",
+        default="right",
     )
     logging.info(f"Using follower namespace: {args.follower_namespace}")
 
 if args.leader_namespace is None:
     args.leader_namespace = prompt.prompt(
         "Please enter the leader robot namespace (e.g., 'left', 'right', ...)",
-        default="right",
+        default="left",
     )
     logging.info(f"Using leader namespace: {args.leader_namespace}")
 
@@ -207,6 +208,7 @@ try:
         num_episodes=args.num_episodes,
         fps=args.fps,
         resume=args.resume,
+        push_to_hub=args.push_to_hub,
     )
     recording_manager.wait_until_ready()
 
@@ -222,14 +224,20 @@ try:
     def on_start():
         """Hook function to be called when starting a new episode."""
         env.reset()
-        leader.robot.controller_switcher_client.switch_controller(
-            "gravity_compensation"
-        )  # TODO: @danielsanjosepro: ask user for which controller to use.
+        try:
+            leader.robot.controller_switcher_client.switch_controller("torque_feedback_controller")
+        except Exception:
+            leader.robot.cartesian_controller_parameters_client.load_param_config(
+                CRISP_CONFIG_PATH / "control" / "gravity_compensation_on_plane.yaml"
+            )
+            leader.robot.controller_switcher_client.switch_controller(
+                "cartesian_impedance_controller"
+            )  # TODO: @danielsanjosepro: ask user for which controller to use.
 
     def on_end():
         """Hook function to be called when stopping the recording."""
         env.robot.reset_targets()
-        env.home(blocking=False)
+        env.robot.home(blocking=False)
         leader.robot.reset_targets()
         leader.robot.home(blocking=False)
 
