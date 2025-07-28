@@ -36,4 +36,4 @@ Lerobot has a lot of dependencies and makes it really hard to install it in your
 [This fork of lerobot](https://github.com/danielsanjosepro/lerobot) has only the dependencies needed to create datasets (which is still quite a lot).
 
 After recording a dataset, you can visualize it using the tools provided by lerobot as well as train a policy with it.
-You will then need to install (separetly) a full version of lerobot and not only use the fork mentioned above.
+You will then need to install (separately) a full version of lerobot and not only use the fork mentioned above.
