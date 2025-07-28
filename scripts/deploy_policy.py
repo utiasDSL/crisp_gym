@@ -16,7 +16,7 @@ from crisp_gym.manipulator_env import (
     ManipulatorCartesianEnv,
     ManipulatorJointEnv,
 )
-from crisp_gym.manipulator_env_config import make_env_config
+from crisp_gym.manipulator_env_config import list_env_configs, make_env_config
 from crisp_gym.record.record_functions import inference_worker, make_policy_fn
 from crisp_gym.record.recording_manager import (
     KeyboardRecordingManager,
@@ -96,6 +96,18 @@ parser.add_argument(
     default=None,
     help="Path to save the recordings.",
 )
+parser.add_argument(
+    "--follower-config",
+    type=str,
+    default=None,
+    help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
+)
+parser.add_argument(
+    "--follower-namespace",
+    type=str,
+    default=None,
+    help="Namespace for the follower robot. This is used to identify the robot in the ROS ecosystem.",
+)
 
 args = parser.parse_args()
 
@@ -131,20 +143,35 @@ if args.path is None:
         exit(1)
 
 
+if args.follower_namespace is None:
+    args.follower_namespace = prompt.prompt(
+        "Please enter the follower robot namespace (e.g., 'left', 'right', ...)",
+        default="right",
+    )
+    logging.info(f"Using follower namespace: {args.follower_namespace}")
+
+if args.follower_config is None:
+    follower_configs = list_env_configs()
+    args.follower_config = prompt.prompt(
+        "Please enter the follower robot configuration name.",
+        options=follower_configs,
+        default=follower_configs[0],
+    )
+    logging.info(f"Using follower configuration: {args.follower_config}")
+
 # Set up the config for the environment
-follower_side = "right"
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 
 # %% Prepare the Follower Environment
-env_config = make_env_config(f"{follower_side}_{args.robot_type}", control_frequency=args.fps)
+env_config = make_env_config(args.follower_config, control_frequency=args.fps)
 if args.use_close_home:
     env_config.robot_config.home_config = home_close_to_table
     env_config.robot_config.time_to_home = args.time_to_home
 
 env = (
-    ManipulatorCartesianEnv(namespace=follower_side, config=env_config)
+    ManipulatorCartesianEnv(namespace=args.follower_namespace, config=env_config)
     if ctrl_type == "cartesian"
-    else ManipulatorJointEnv(namespace=follower_side, config=env_config)
+    else ManipulatorJointEnv(namespace=args.follower_namespace, config=env_config)
 )
 
 # %% Prepare the dataset
