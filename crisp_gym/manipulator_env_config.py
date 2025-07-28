@@ -170,7 +170,7 @@ class AlohaFrankaEnvConfig(ManipulatorEnvConfig):
 
     # The aloha gripper can be controlled in a continuous manner, so we set this to True.
     gripper_enabled: bool = True
-    gripper_continous_control: bool = True
+    gripper_continuous_control: bool = True
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
     gripper_config: GripperConfig | None = field(
