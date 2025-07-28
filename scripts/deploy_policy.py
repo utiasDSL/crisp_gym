@@ -5,6 +5,7 @@ import logging
 import time
 from multiprocessing import Pipe, Process
 
+from lerobot.configs.train import TrainPipelineConfig
 from rich.logging import RichHandler
 
 import crisp_gym  # noqa: F401
@@ -102,28 +103,34 @@ args = parser.parse_args()
 FORMAT = "%(message)s"
 logging.basicConfig(level=args.log_level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
+logging.info("-" * 40)
 logging.info("Arguments:")
 for arg, value in vars(args).items():
     logging.info(f"  {arg}: {value}")
+logging.info("-" * 40)
 
 
 if args.path is None:
-    logging.info("No path provided, the available models are:")
+    logging.info(" No path provided. Searching for models in 'outputs/train' directory.")
     from pathlib import Path
 
-    models_path = Path("outputs/models")
+    # We check recursively in the 'outputs/train' directory for 'pretrained_model's recursively
+    models_path = Path("outputs/train")
     if models_path.exists() and models_path.is_dir():
-        models = [d.name for d in models_path.iterdir() if d.is_dir()]
-        args.path = models_path / prompt.prompt(
-            message="Please select a model to use for recording:",
-            options=models,
-            default=models[0] if models else None,
+        models = [model for model in models_path.glob("**/pretrained_model") if model.is_dir()]
+        models_names = sorted([str(model) for model in models], key=lambda x: x.lower())
+
+        args.path = prompt.prompt(
+            message="Please select a model to use for deployment:",
+            options=models_names,
+            default=models_names[0] if models else None,
         )
         logging.info(f"Using model path: {args.path}")
     else:
         logging.error("'outputs/models' directory does not exist.")
         logging.error("Please provide a valid path to the model using --path or create a new one.")
         exit(1)
+
 
 # Set up the config for the environment
 follower_side = "right"
@@ -144,19 +151,6 @@ env = (
 # %% Prepare the dataset
 features = get_features(env, ctrl_type=ctrl_type)
 
-# %% Set up multiprocessing for policy inference
-logging.info("Setting up multiprocessing for policy inference.")
-parent_conn, child_conn = Pipe()
-
-# Start inference process
-inf_proc = Process(
-    target=inference_worker,
-    args=(child_conn, args.path, env),
-    daemon=True,
-)
-inf_proc.start()
-
-time.sleep(1.0)  # Give some time for the process to start
 
 if args.recording_manager_type == "keyboard":
     reconding_manager_cls = KeyboardRecordingManager
@@ -178,6 +172,25 @@ recording_manager = reconding_manager_cls(
 )
 recording_manager.wait_until_ready()
 
+# %% Set up multiprocessing for policy inference
+logging.info("Setting up multiprocessing for policy inference.")
+parent_conn, child_conn = Pipe()
+
+
+# Start inference process
+inf_proc = Process(
+    target=inference_worker,
+    kwargs={
+        "conn": child_conn,
+        "pretrained_path": args.path,
+        "env": env,
+    },
+    daemon=True,
+)
+inf_proc.start()
+
+time.sleep(1.0)  # Give some time for the process to start
+
 logging.info("Homing robot before starting with recording.")
 
 env.home()
@@ -193,7 +206,7 @@ def on_start():
 def on_end():
     """Hook function to be called when stopping the recording."""
     env.robot.reset_targets()
-    env.home(blocking=True)
+    env.robot.home(blocking=False)
 
 
 with recording_manager:

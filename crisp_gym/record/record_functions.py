@@ -8,9 +8,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Callable
 
+from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 import numpy as np
 import torch
-from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
+from lerobot.configs.train import PreTrainedConfig, TrainPipelineConfig
+from lerobot.policies.factory import get_policy_class
 
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection
@@ -92,19 +94,31 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
     return _fn
 
 
-def inference_worker(conn: Connection, policy_path: str, env: ManipulatorBaseEnv):  # noqa: ANN001
+def inference_worker(
+    conn: Connection,
+    pretrained_path: str,
+    env: ManipulatorBaseEnv,
+):  # noqa: ANN001
     """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
 
     Args:
         conn (Connection): The connection to the parent process for sending and receiving data.
-        policy_path (str): Path to the pretrained policy model.
+        pretrained_path (str): Path to the pretrained policy model.
+        dataset_metadata (LeRobotDatasetMetadata): Metadata for the dataset, if needed.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    train_config = TrainPipelineConfig.from_pretrained(pretrained_path)
+    if train_config.policy is None:
+        raise ValueError(
+            f"Policy configuration is missing in the pretrained path: {pretrained_path}. "
+            "Please ensure the policy is correctly configured."
+        )
+    policy_cls = get_policy_class(train_config.policy.type)
+    policy = policy_cls.from_pretrained(pretrained_path)
 
-    policy = DiffusionPolicy.from_pretrained(policy_path)
     logging.info(
-        f"[Inference] Loaded policy from {policy_path} on device {device} with {policy.config.num_inference_steps} inference steps."
+        f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
     )
     policy.reset()
     policy.to(device).eval()

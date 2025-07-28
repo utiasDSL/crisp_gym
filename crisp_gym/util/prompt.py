@@ -18,12 +18,14 @@ def prompt(
     Returns:
         str: The selected or entered string.
     """
+    logging.info("-" * 40)
     if options:
         logging.info(message)
         for i, option in enumerate(options, 1):
             logging.info(f"{i}. {option}")
         if default:
             logging.info(f"(Default: {default})")
+        logging.info("-" * 40)
 
         while True:
             choice = input("Enter number, text, or press Enter for default: ").strip()
@@ -48,6 +50,7 @@ def prompt(
             if default is not None:
                 message += f" (Default: '{default}')"
             logging.info(message)
+            logging.info("-" * 40)
             response = input("Enter string or press Enter for default: ").strip()
             if response:
                 return response
