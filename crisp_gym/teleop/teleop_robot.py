@@ -25,15 +25,19 @@ class TeleopRobot:
         self.robot = Robot(
             robot_config=config.leader, namespace=config.leader_namespace or namespace
         )
-        self.gripper = Gripper(
-            gripper_config=config.leader_gripper,
-            namespace=config.leader_gripper_namespace or f"{namespace}/gripper",
-        )
+        if config.leader_gripper is not None:
+            self.gripper = Gripper(
+                gripper_config=config.leader_gripper,
+                namespace=config.leader_gripper_namespace or f"{namespace}/gripper",
+            )
+        else:
+            self.gripper = None
 
     def wait_until_ready(self):
         """Wait until the leader robot and its gripper are ready."""
         self.robot.wait_until_ready()
-        self.gripper.wait_until_ready()
+        if self.gripper is not None:
+            self.gripper.wait_until_ready()
 
     def prepare_for_teleop(self, home: bool = True, blocking: bool = True):
         """Prepare the leader robot for teleoperation.
@@ -49,5 +53,5 @@ class TeleopRobot:
         )
         self.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
-        if self.config.disable_gripper_torque:
+        if self.gripper is not None and not self.config.disable_gripper_torque:
             self.gripper.disable_torque()

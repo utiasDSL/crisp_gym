@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 
+
 if TYPE_CHECKING:
     from crisp_gym.manipulator_env import ManipulatorBaseEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
@@ -58,11 +59,20 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
         prev_pose = pose
         prev_joint = joint
 
-        gripper = env.gripper.value + np.clip(
-            leader.gripper.value - env.gripper.value,
-            -env.gripper.config.max_delta,
-            env.gripper.config.max_delta,
-        )
+        if leader.gripper is None:
+            gripper = 0.0
+        elif env.gripper is None:
+            gripper = leader.gripper.value + np.clip(
+                leader.gripper.value - leader.gripper.value,
+                -leader.gripper.config.max_delta,
+                leader.gripper.config.max_delta,
+            )
+        else:
+            gripper = env.gripper.value + np.clip(
+                leader.gripper.value - env.gripper.value,
+                -env.gripper.config.max_delta,
+                env.gripper.config.max_delta,
+            )
 
         action = np.concatenate(
             [
