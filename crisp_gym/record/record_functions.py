@@ -8,10 +8,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Callable
 
-from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 import numpy as np
 import torch
-from lerobot.configs.train import PreTrainedConfig, TrainPipelineConfig
+from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 
 if TYPE_CHECKING:

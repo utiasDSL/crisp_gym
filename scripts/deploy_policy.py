@@ -5,7 +5,6 @@ import logging
 import time
 from multiprocessing import Pipe, Process
 
-from lerobot.configs.train import TrainPipelineConfig
 from rich.logging import RichHandler
 
 import crisp_gym  # noqa: F401
