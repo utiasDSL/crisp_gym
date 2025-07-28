@@ -4,11 +4,10 @@
       <AllowMulticast>true</AllowMulticast>
       <Interfaces>
         <NetworkInterface name="enp4s0" />
-      </Interfaces>
+        </Interfaces>
     </General>
     <Discovery>
       <ParticipantIndex>none</ParticipantIndex>
     </Discovery>
   </Domain>
 </CycloneDDS>
-

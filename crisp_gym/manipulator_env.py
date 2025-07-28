@@ -1,9 +1,11 @@
 """General manipulator environments."""
+
 import os
 from typing import Any, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
+import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
@@ -30,10 +32,22 @@ class ManipulatorBaseEnv(gym.Env):
         super().__init__()
         self.config = config if config else FrankaEnvConfig()
 
-        self.robot = Robot(namespace=namespace, robot_config=self.config.robot_config)
-        self.gripper = Gripper(namespace=namespace, gripper_config=self.config.gripper_config)
+        if not rclpy.ok():
+            rclpy.init()
+
+        self.robot = Robot(
+            namespace=namespace,
+            robot_config=self.config.robot_config,
+        )
+        self.gripper = Gripper(
+            namespace=namespace,
+            gripper_config=self.config.gripper_config,
+        )
         self.cameras = [
-            Camera(namespace=namespace, config=camera_config)
+            Camera(
+                namespace=namespace,
+                config=camera_config,
+            )
             for camera_config in self.config.camera_configs
         ]
 
@@ -41,7 +55,8 @@ class ManipulatorBaseEnv(gym.Env):
         self.ctrl_type = None
 
         self.robot.wait_until_ready(timeout=3)
-        self.gripper.wait_until_ready(timeout=3)
+        if self.config.gripper_enabled:
+            self.gripper.wait_until_ready(timeout=3)
         for camera in self.cameras:
             camera.wait_until_ready(timeout=3)
 
@@ -63,6 +78,11 @@ class ManipulatorBaseEnv(gym.Env):
             )
 
         self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
+
+        if any(camera.config.resolution is None for camera in self.cameras):
+            raise ValueError(
+                "All cameras must have a resolution defined in the configuration file."
+            )
 
         self.observation_space = gym.spaces.Dict(
             {
@@ -113,7 +133,9 @@ class ManipulatorBaseEnv(gym.Env):
             ),
             axis=0,
         )
-        obs["gripper"] = 1 - np.array([self.gripper.value])
+        obs["gripper"] = (
+            1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
+        )
         return obs
 
     def _set_gripper_action(self, action: float):
@@ -122,18 +144,28 @@ class ManipulatorBaseEnv(gym.Env):
         Args:
             action (float): Action value for the gripper (0,1).
         """
-        if action >= self.config.gripper_threshold and self.gripper.is_open(
-            open_threshold=self.config.gripper_threshold
-        ):
-            self.gripper.close()
-        elif action < self.config.gripper_threshold and not self.gripper.is_open(
-            open_threshold=self.config.gripper_threshold
-        ):
-            self.gripper.open()
+        if not self.config.gripper_enabled:
+            return
 
-    def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
+        if self.config.gripper_continuous_control:
+            # If continuous control is enabled, set the gripper value directly
+            self.gripper.set_target(action)
+        else:
+            if action >= self.config.gripper_threshold and self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.close()
+            elif action < self.config.gripper_threshold and not self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.open()
+
+    def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment.
 
+        Args:
+            action (np.ndarray): Action to be executed in the environment.
+            block (bool): If True, block to maintain the control rate.
         Returns truncated flag if max_episode_steps is reached.
         """
         obs = {}
@@ -196,10 +228,12 @@ class ManipulatorBaseEnv(gym.Env):
                 "Control type should be set in the configuration file of the environment."
             )
 
-        self.gripper.open()
-        self.robot.home(home_config, blocking)
+        if self.config.gripper_enabled:
+            self.gripper.open()
+        self.robot.home(home_config=home_config, blocking=blocking)
 
-        self.switch_controller(current_ctrl_type)
+        if not blocking:
+            self.switch_controller(current_ctrl_type)
 
     def move_to(
         self, position: List | NDArray | None = None, pose: Pose | None = None, speed: float = 0.05
@@ -225,7 +259,8 @@ class ManipulatorBaseEnv(gym.Env):
             )
             position = None
 
-        self.gripper.open()
+        if self.config.gripper_enabled:
+            self.gripper.open()
         self.robot.move_to(position=position, pose=pose, speed=speed)
 
         self.robot.reset_targets()
@@ -246,7 +281,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
-        super().__init__(namespace, config)
+        super().__init__(namespace=namespace, config=config)
 
         self._min_z_height = 0.0
 
@@ -272,6 +307,18 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.switch_controller("cartesian")
 
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[dict, dict]:
+        """Reset the environment."""
+        obs, info = super().reset(seed=seed, options=options)
+
+        self.robot.reset_targets()
+        self.robot.wait_until_ready()
+        self.switch_controller("cartesian")
+
+        return obs, info
+
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
 
@@ -296,7 +343,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         target_pose = Pose(position=target_position, orientation=target_orientation)
         self.robot.set_target(pose=target_pose)
 
-        self._set_gripper_action(action[6])
+        if self.config.gripper_enabled:
+            self._set_gripper_action(action[6])
 
         if block:
             self.control_rate.sleep()
@@ -335,6 +383,18 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
 
         self.switch_controller("joint")
 
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[dict, dict]:
+        """Reset the environment."""
+        obs, info = super().reset(seed=seed, options=options)
+
+        self.robot.reset_targets()
+        self.robot.wait_until_ready()
+        self.switch_controller("joint")
+
+        return obs, info
+
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
 
@@ -356,12 +416,13 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         )
         # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
-        #target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
+        # target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
         target_joint = self.robot.target_joint + action[:7]
 
         self.robot.set_target_joint(target_joint)
 
-        self._set_gripper_action(action[7])
+        if self.config.gripper_enabled:
+            self._set_gripper_action(action[7])
 
         if block:
             self.control_rate.sleep()

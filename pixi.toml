@@ -7,15 +7,20 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [activation]
-scripts = ["scripts/set_cyclone.sh"]
+scripts = [
+    "scripts/set_cyclone.sh",
+    "scripts/set_env.sh",
+]
 
 [dependencies]
-python = "*"
+python = "3.11.*"
 compilers = "*"
 cmake = "*"
 pkg-config = "*"
 make = "*"
 ninja = "*"
+typing_inspect = ">=0.9.0,<0.10"
+libstdcxx-ng = ">=12.2.0"
 
 [target.linux.dependencies]
 libgl-devel = "*"
@@ -23,13 +28,24 @@ libgl-devel = "*"
 [environments]
 dev = { features = ["dev"] }
 humble = { features = ["humble"] }
+humble-lerobot = { features = ["humble", "lerobot"] }
+lerobot = { features = ["lerobot"] }
 jazzy = { features = ["jazzy"] }
+jazzy-lerobot = { features = ["jazzy", "lerobot"] }
 
 [feature.dev.pypi-dependencies]
 pre-commit = "*"
 ruff = "*"
 
-# humble
+[feature.lerobot.pypi-dependencies]
+# lerobot = { path = "../lerobot", editable = false }
+lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
+rich = ">=14.0.0, <15"
+
+[feature.lerobot.dependencies]
+pynput = "*"
+rerun-sdk = "==0.22.0"
+
 [feature.humble]
 channels = ["https://prefix.dev/robostack-humble"]
 
@@ -38,11 +54,9 @@ ros-humble-desktop = "*"
 colcon-common-extensions = "*"
 ros-humble-ros2-control = "*"
 ros-humble-ros2-controllers = "*"
-ros-humble-rmw-zenoh-cpp = "*"
 rosdep = "*"
 ros-humble-rmw-cyclonedds-cpp = "*"
 
-# jazzy
 [feature.jazzy]
 channels = ["https://prefix.dev/robostack-jazzy"]
 
@@ -52,7 +66,8 @@ ros-jazzy-ros2-control = "*"
 ros-jazzy-ros2-controllers = "*"
 colcon-common-extensions = "*"
 rosdep = "*"
+ros-jazzy-rmw-cyclonedds-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-crisp_py = { path = "../crisp_py", editable = true }  # TODO: Move to pyproject.toml when available in pypi
+crisp_py = { path = "../crisp_py", editable = false }  # TODO: Move to pyproject.toml when available in pypi
