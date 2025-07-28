@@ -85,7 +85,7 @@ class NoCamFrankaEnvConfig(ManipulatorEnvConfig):
     control_frequency: float = 10.0
 
     gripper_threshold: float = 0.1
-    gripper_continous_control: bool = True
+    gripper_continuous_control: bool = True
     gripper_enabled: bool = False
 
     robot_config: RobotConfig = field(default_factory=lambda: FrankaConfig())
