@@ -147,7 +147,7 @@ class ManipulatorBaseEnv(gym.Env):
         if not self.config.gripper_enabled:
             return
 
-        if self.config.gripper_continous_control:
+        if self.config.gripper_continuous_control:
             # If continuous control is enabled, set the gripper value directly
             self.gripper.set_target(action)
         else:
