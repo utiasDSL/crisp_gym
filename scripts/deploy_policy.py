@@ -152,16 +152,16 @@ features = get_features(env, ctrl_type=ctrl_type)
 
 
 if args.recording_manager_type == "keyboard":
-    reconding_manager_cls = KeyboardRecordingManager
+    recording_manager_cls = KeyboardRecordingManager
 elif args.recording_manager_type == "ros":
-    reconding_manager_cls = ROSRecordingManager
+    recording_manager_cls = ROSRecordingManager
 else:
     raise ValueError(
         f"Unsupported recording manager type: {args.recording_manager_type}. "
         "Currently only 'keyboard' and 'ros' are supported."
     )
 
-recording_manager = reconding_manager_cls(
+recording_manager = recording_manager_cls(
     features=features,
     repo_id=args.repo_id,
     robot_type=args.robot_type,
