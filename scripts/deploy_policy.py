@@ -233,7 +233,7 @@ parent_conn, child_conn = Pipe()
 # Start inference process
 inf_proc = Process(
     target=inference_worker,
-    args=(child_conn, "models/pretrained_model", env),
+    args=(child_conn, "outputs/models/pretrained_model", env),
     daemon=True,
 )
 inf_proc.start()
