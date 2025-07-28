@@ -2,7 +2,7 @@
 
 from typing import Dict
 
-from lerobot.common.datasets.lerobot_dataset import CODEBASE_VERSION
+from lerobot.datasets.lerobot_dataset import CODEBASE_VERSION
 
 from crisp_gym.manipulator_env import ManipulatorBaseEnv
 

@@ -28,7 +28,6 @@ You can interactively save episodes using the keyboard to save or delete failed 
 For now the data-collection works with:
 - [x] Kinesthetic teaching,
 - [x]  In a dual arm setup with follower and leader,
-- [ ]  Using a motion tracking system like vicon.
 
 It is important to note, that to record a dataset in `lerobot` format, you need to install lerobot.
 Lerobot has a lot of dependencies and makes it really hard to install it in your system without breaking some previous config.

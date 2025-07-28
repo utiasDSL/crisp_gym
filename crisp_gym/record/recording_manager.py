@@ -9,24 +9,20 @@ from pathlib import Path
 from typing import Callable, Literal
 
 import rclpy
-from lerobot.common.constants import HF_LEROBOT_HOME
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.common.datasets.utils import build_dataset_frame
+from lerobot.constants import HF_LEROBOT_HOME
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.datasets.utils import build_dataset_frame
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
+from rich import print
+from rich.logging import RichHandler
+from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
-try:
-    from rich import print
-    from rich.logging import RichHandler
-    from rich.panel import Panel
-
-    FORMAT = "%(message)s"
-    logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
-except ImportError:
-    FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    logging.basicConfig(level="INFO", format=FORMAT, datefmt="%Y-%m-%d %H:%M:%S")
+level = "INFO"
+FORMAT = "%(message)s"
+logging.basicConfig(level=level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
 
 class RecordingManager(ABC):
@@ -145,13 +141,14 @@ class RecordingManager(ABC):
 
         while True:
             msg = self.queue.get()
+            logging.debug(f"Received message: {msg['type']}")
             try:
                 mtype = msg["type"]
 
                 if mtype == "FRAME":
                     obs, action, task = msg["data"]
 
-                    logging.debug(f"Received frame with action: {action} and obs: {obs}")
+                    logging.debug(f"Received frame with action: {action} and obs: {obs.keys()}")
 
                     action_dict = {
                         dim: action[i] for i, dim in enumerate(self.features["action"]["names"])
@@ -181,6 +178,7 @@ class RecordingManager(ABC):
                     }
 
                     dataset.add_frame(frame, task=task)
+                    logging.debug("Frame added to dataset.")
 
                 elif mtype == "SAVE_EPISODE":
                     dataset.save_episode()
@@ -203,6 +201,8 @@ class RecordingManager(ABC):
                 elif mtype == "SHUTDOWN":
                     logging.info("Shutting down writer process.")
                     break
+            except Exception as e:
+                logging.debug("Error occured: ", e)
             finally:
                 pass
 
@@ -231,6 +231,7 @@ class RecordingManager(ABC):
             return
 
         if on_start:
+            logging.info("Resetting Environment.")
             on_start()
 
         logging.info("Started recording episode.")
@@ -239,22 +240,26 @@ class RecordingManager(ABC):
             frame_start = time.time()
 
             obs, action = data_fn()
+
             if obs is None or action is None:
                 # If the data function returns None, skip this frame
                 sleep_time = 1 / self.fps - (time.time() - frame_start)
                 time.sleep(sleep_time)
                 continue
 
-            self.queue.put({"type": "FRAME", "data": (obs, action, task)})
+            logging.debug("Not writing frame")
 
             sleep_time = 1 / self.fps - (time.time() - frame_start)
             if sleep_time > 0:
                 time.sleep(sleep_time)
             else:
                 logging.warning(
-                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS.",
-                    "Consider decreasing the FPS or optimizing the data function.",
+                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS. "
+                    "Consider decreasing the FPS or optimizing the data function."
                 )
+            logging.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
+
+        logging.debug("Finished recording...")
 
         if on_end:
             on_end()
@@ -297,9 +302,15 @@ class RecordingManager(ABC):
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001, D105
         """Exit the recording manager."""
-        if self.push_to_hub:
+        if exc_type is not None:
+            logging.error(
+                "An error occurred during recording. Shutting down the recording manager.",
+                exc_info=(exc_type, exc_value, traceback),
+            )
+
+        if not self.push_to_hub:
             logging.info(
-                "Not pushing dataset to Hugging Face Hub. Use --no-push-to-hub to skip this step."
+                "Not pushing dataset to Hugging Face Hub. Use --push-to-hub to not skip this step."
             )
         else:
             self.queue.put({"type": "PUSH_TO_HUB"})

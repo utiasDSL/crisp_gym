@@ -79,6 +79,11 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
 
+        if any(camera.config.resolution is None for camera in self.cameras):
+            raise ValueError(
+                "All cameras must have a resolution defined in the configuration file."
+            )
+
         self.observation_space = gym.spaces.Dict(
             {
                 **{
@@ -155,9 +160,12 @@ class ManipulatorBaseEnv(gym.Env):
             ):
                 self.gripper.open()
 
-    def step(self, action: np.ndarray) -> Tuple[dict, float, bool, bool, dict]:
+    def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment.
 
+        Args:
+            action (np.ndarray): Action to be executed in the environment.
+            block (bool): If True, block to maintain the control rate.
         Returns truncated flag if max_episode_steps is reached.
         """
         obs = {}

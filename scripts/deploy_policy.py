@@ -2,12 +2,15 @@
 
 import argparse
 import logging
+import multiprocessing
+import time
+from multiprocessing import Pipe, Process, connection
+from multiprocessing.connection import Connection
 from typing import Callable  # noqa: I001
 
 import numpy as np
 import torch
-from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
-from lerobot.common.policies.pretrained import PreTrainedPolicy
+from lerobot.policies.diffusion.modeling_diffusion import DiffusionPolicy
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import (
@@ -25,73 +28,108 @@ from crisp_gym.record.recording_manager import (
     ROSRecordingManager,
 )
 
+from rich.logging import RichHandler
 
-def make_policy_fn(env: ManipulatorBaseEnv, policy: PreTrainedPolicy) -> Callable:
-    """Create a function to apply a policy in the environment.
 
-    This function returns a Callable that, when invoked, observes the current state
-    of the environment, applies the given policy to determine the action, and steps
-    the environment with that action.
+def inference_worker(conn: Connection, policy_path: str, env: ManipulatorBaseEnv):  # noqa: ANN001
+    """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    Args:
-        env (ManipulatorBaseEnv): The environment in which the policy will be applied.
-        policy (Callable): A Callable that takes an observation and returns an action.
+    policy = DiffusionPolicy.from_pretrained(policy_path)
+    logging.info(
+        f"[Inference] Loaded policy from {policy_path} on device {device} with {policy.config.num_inference_steps} inference steps."
+    )
+    policy.reset()
+    policy.to(device).eval()
 
-    Returns:
-        Callable: A function that, when called, performs a step in the environment
-        using the policy and returns the observation and action taken.
-    """
+    warmup_obs = {"observation.state": torch.zeros((1, 7), device=device), "task": ""}
+    for cam in env.cameras:
+        if cam.config.resolution is None:
+            raise ValueError(
+                f"Camera {cam.config.camera_name} does not have a resolution set. "
+                "Please set the resolution in the camera configuration."
+            )
+        warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
+            (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
+        )
 
-    # WARNING: this is an example of a policy function that can be used with the recording manager. But is untested.
-    def _fn() -> tuple:
-        """Function to apply the policy in the environment.
+    with torch.inference_mode():
+        _ = policy.select_action(warmup_obs)
+        torch.cuda.synchronize()
 
-        This function observes the current state of the environment, applies the policy,
-        and steps the environment with the action returned by the policy.
+    logging.info("[Inference] Warm-up complete")
 
-        Returns:
-            tuple: A tuple containing the observation from the environment and the action taken.
-        """
-        obs_raw = env._get_obs()
-        with torch.inference_mode(), torch.autocast(device_type="cuda"):
-            # Convert to pytorch format: channel first and float32 in [0,1] with batch dimension
-            obs = {}
+    while True:
+        obs_raw = conn.recv()
+        if obs_raw is None:
+            break
+        if obs_raw == "reset":
+            logging.info("[Inference] Resetting policy")
+            policy.reset()
+            continue
 
-            # Propioceptive state
+        with torch.inference_mode():
             state = np.concatenate([obs_raw["cartesian"][:6], obs_raw["gripper"]])
-            obs = {"observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float()}
-
+            obs = {
+                "observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float(),
+                "task": "",  # TODO: Add task description if needed
+            }
             for cam in env.cameras:
                 img = obs_raw[f"{cam.config.camera_name}_image"]
                 obs[f"observation.images.{cam.config.camera_name}"] = (
                     torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).cuda().float() / 255
                 )
 
-            obs["task"] = ""
-
-            # Compute the next action with the policy
-            # based on the current observation
             action = policy.select_action(obs)
 
-            # Remove batch dimension
-            action = action.squeeze(0)
+        logging.debug(f"[Inference] Computed action: {action}")
+        conn.send(action)
 
-            # Move to cpu, if not already the case
-            action = action.to("cpu")
+    conn.close()
+    logging.info("[Inference] Worker shutting down")
+
+
+def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable:
+    """Create a function to apply a policy in the environment using multiprocessing.
+
+    This function returns a Callable that, when invoked, observes the current state
+    of the environment, sends the observation to the inference worker via pipe,
+    receives the action, and steps the environment with that action.
+
+    Args:
+        env (ManipulatorBaseEnv): The environment in which the policy will be applied.
+        parent_conn (Connection): The connection to the inference worker for sending observations
+
+    Returns:
+        Callable: A function that, when called, performs a step in the environment
+        using the policy and returns the observation and action taken.
+    """
+
+    def _fn() -> tuple:
+        """Function to apply the policy in the environment.
+
+        This function observes the current state of the environment, sends the observation
+        to the inference worker, receives the action, and steps the environment.
+
+        Returns:
+            tuple: A tuple containing the observation from the environment and the action taken.
+        """
+        obs_raw = env._get_obs()
+
+        # Send observation to inference worker and receive action
+        parent_conn.send(obs_raw)
+        action = parent_conn.recv().squeeze(0).to("cpu").numpy()
+        logging.debug(f"Action: {action}")
+
+        try:
+            env.step(action, block=False)
+        except Exception as e:
+            logging.error(f"Error during environment step: {e}")
 
         return obs_raw, action
 
     return _fn
 
-
-try:
-    from rich.logging import RichHandler
-
-    FORMAT = "%(message)s"
-    logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
-except ImportError:
-    FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-    logging.basicConfig(level="INFO", format=FORMAT, datefmt="%Y-%m-%d %H:%M:%S")
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -152,8 +190,22 @@ parser.add_argument(
     action="store_true",
     help="Whether to use joint control for the robot.",
 )
+parser.add_argument(
+    "--log-level",
+    type=str,
+    default="INFO",
+    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    help="Set the logging level.",
+)
 
 args = parser.parse_args()
+
+FORMAT = "%(message)s"
+logging.basicConfig(level=args.log_level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+
+logging.info("Arguments:")
+for arg, value in vars(args).items():
+    logging.info(f"  {arg}: {value}")
 
 # Set up the config for the environment
 follower_side = "right"
@@ -174,27 +226,19 @@ env = (
 # %% Prepare the dataset
 features = get_features(env, ctrl_type=ctrl_type)
 
-# %% Prepare the policy
-device = "cuda" if torch.cuda.is_available() else "cpu"
-logging.info(f"Using device '{device}' for the policy inference.")
-policy = DiffusionPolicy.from_pretrained(
-    repo_id="lerobot/diffusion_policy_franka_single",
-    device=device,
+# %% Set up multiprocessing for policy inference
+logging.info("Setting up multiprocessing for policy inference.")
+parent_conn, child_conn = Pipe()
+
+# Start inference process
+inf_proc = Process(
+    target=inference_worker,
+    args=(child_conn, "models/pretrained_model", env),
+    daemon=True,
 )
-policy.reset()
-policy.to(device).eval()
+inf_proc.start()
 
-# %% Warm up CUDA kernels
-warmup_obs = {"observation.state": torch.zeros((1, 7), device=device)}
-for cam in env.cameras:
-    warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
-        (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
-    )
-warmup_obs["task"] = "Pick up the lego block."
-
-with torch.inference_mode():
-    _ = policy.select_action(warmup_obs)
-    torch.cuda.synchronize()
+time.sleep(1.0)  # Give some time for the process to start
 
 if args.recording_manager_type == "keyboard":
     reconding_manager_cls = KeyboardRecordingManager
@@ -225,6 +269,7 @@ env.reset()
 def on_start():
     """Hook function to be called when starting a new episode."""
     env.reset()
+    parent_conn.send("reset")
 
 
 def on_end():
@@ -240,12 +285,18 @@ with recording_manager:
         )
 
         recording_manager.record_episode(
-            data_fn=make_policy_fn(env),
+            data_fn=make_policy_fn(env, parent_conn),
             task="Pick up the lego block.",
             on_start=on_start,
             on_end=on_end,
         )
 
+        logging.info("Episode finished. Waiting for the next episode to start.")
+
+# Shutdown inference process
+logging.info("Shutting down inference process.")
+parent_conn.send(None)
+inf_proc.join()
 
 logging.info("Homing robot.")
 env.home()
