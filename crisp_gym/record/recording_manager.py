@@ -2,16 +2,17 @@
 
 import logging
 import multiprocessing as mp
+import subprocess
 import threading
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable, Literal
 
+import numpy as np
 import rclpy
-from lerobot.constants import HF_LEROBOT_HOME
-from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.datasets.utils import build_dataset_frame
+from lerobot.common.constants import HF_LEROBOT_HOME
+from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
@@ -37,6 +38,7 @@ class RecordingManager(ABC):
         fps: int = 30,
         num_episodes: int = 3,
         push_to_hub: bool = False,
+        use_sound: bool = True,
     ) -> None:
         """Initialize the recording manager.
 
@@ -48,6 +50,7 @@ class RecordingManager(ABC):
             fps: Frames per second for the dataset (default is 30).
             num_episodes: Number of episodes to record (default is 3).
             push_to_hub: Whether to push the dataset to Hugging Face Hub (default is False).
+            use_sound: Whether to use sound notifications for episode completion (default is True).
         """
         self.state: Literal[
             "is_waiting", "recording", "paused", "to_be_saved", "to_be_deleted", "exit"
@@ -60,6 +63,7 @@ class RecordingManager(ABC):
         self.fps = fps
         self.num_episodes = num_episodes
         self.push_to_hub = push_to_hub
+        self.use_sound = use_sound
         self.episode_count = 0
 
         self.queue = mp.JoinableQueue(16)
@@ -150,30 +154,29 @@ class RecordingManager(ABC):
 
                     logging.debug(f"Received frame with action: {action} and obs: {obs.keys()}")
 
-                    action_dict = {
-                        dim: action[i] for i, dim in enumerate(self.features["action"]["names"])
+                    frame = {
+                        "observation.state": np.hstack(
+                            [
+                                obs["cartesian"],
+                                obs["gripper"],
+                            ]
+                        ).astype(np.float32),
+                        "action": action.astype(np.float32),
                     }
-
-                    obs_dict = {
-                        dim: (obs["cartesian"][i] if i < 6 else obs["gripper"][0])
-                        for i, dim in enumerate(self.features["observation.state"]["names"])
+                    joints_frame = {
+                        "observation.state.joint": obs["joint"].astype(np.float32),
                     }
                     cam_frame = {
                         f"observation.images.{camera_name}": obs[f"{camera_name}_image"]
                         for camera_name in camera_names
                     }
 
-                    logging.debug(f"Action dict: {action_dict}")
-                    logging.debug(f"Observation dict: {obs_dict}")
-
-                    action_frame = build_dataset_frame(self.features, action_dict, prefix="action")
-                    obs_frame = build_dataset_frame(
-                        self.features, obs_dict, prefix="observation.state"
-                    )
+                    logging.debug(f"Obs/Action frame: {frame}")
+                    logging.debug(f"Camera frame: {cam_frame}")
 
                     frame = {
-                        **obs_frame,
-                        **action_frame,
+                        **frame,
+                        **joints_frame,
                         **cam_frame,
                     }
 
@@ -181,9 +184,31 @@ class RecordingManager(ABC):
                     logging.debug("Frame added to dataset.")
 
                 elif mtype == "SAVE_EPISODE":
+                    if self.use_sound:
+                        try:
+                            subprocess.run(
+                                "paplay /usr/share/sounds/freedesktop/stereo/complete.oga &",
+                                shell=True,
+                            )
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to play sound for episode completion: {e}",
+                            )
+
                     dataset.save_episode()
 
                 elif mtype == "DELETE_EPISODE":
+                    if self.use_sound:
+                        try:
+                            subprocess.run(
+                                "paplay /usr/share/sounds/freedesktop/stereo/suspend-error.oga &",
+                                shell=True,
+                            )
+                        except Exception as e:
+                            logging.error(
+                                f"Failed to play sound for episode completion: {e}",
+                            )
+
                     dataset.clear_episode_buffer()
 
                 elif mtype == "PUSH_TO_HUB":
