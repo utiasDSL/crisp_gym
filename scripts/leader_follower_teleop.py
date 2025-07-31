@@ -4,7 +4,7 @@ import time
 
 import numpy as np
 
-from crisp_gym.config.home import home_close_to_table, home_front_up
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
 from crisp_gym.manipulator_env_config import make_env_config
 from crisp_gym.teleop.teleop_robot import TeleopRobot
@@ -20,7 +20,8 @@ USE_FORCE_FEEDBACK = True  # Set to True if you want to use force feedback from 
 # %% Leader setup
 print("Setting up leader robot...")
 leader_config = make_leader_config("left_aloha_franka")
-leader_config.leader.home_config = home_front_up
+# leader_config.leader.home_config = home_front_up
+leader_config.leader.home_config = home_close_to_table
 leader_config.leader_gripper.publish_frequency = 30.0
 leader_config.leader_gripper.max_delta = 0.15
 leader = TeleopRobot(config=leader_config)
