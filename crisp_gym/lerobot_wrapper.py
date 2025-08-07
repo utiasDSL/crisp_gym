@@ -34,10 +34,16 @@ def get_features(env: ManipulatorBaseEnv, ctrl_type: str = "cartesian") -> Dict[
 
     # Propioceptive
     # Feature configuration
+    # TODO: propioceptive features should not be dependent on the control type.
+    features["observation.state.joint"] = {
+        "dtype": "float32",
+        "shape": (len(ctrl_dims["joint"]) - 1,),  # Exclude gripper
+        "names": ctrl_dims["joint"][:-1],  # Exclude gripper
+    }
     features["observation.state"] = {
         "dtype": "float32",
-        "shape": (len(ctrl_dims[ctrl_type]),),
-        "names": ctrl_dims[ctrl_type],
+        "shape": (len(ctrl_dims["cartesian"]),),
+        "names": ctrl_dims["cartesian"],
     }
 
     # Action
