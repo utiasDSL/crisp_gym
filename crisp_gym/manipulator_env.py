@@ -12,7 +12,8 @@ from crisp_py.robot import Pose, Robot
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 
-from crisp_gym.manipulator_env_config import FrankaEnvConfig, ManipulatorEnvConfig
+from crisp_gym.manipulator_env_config import ManipulatorEnvConfig
+from crisp_gym.util.control_type import ControlType
 
 
 class ManipulatorBaseEnv(gym.Env):
@@ -22,7 +23,7 @@ class ManipulatorBaseEnv(gym.Env):
     It cannot be used directly.
     """
 
-    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None):
+    def __init__(self, config: ManipulatorEnvConfig, namespace: str = ""):
         """Initialize the Manipulator Gym Environment.
 
         Args:
@@ -30,7 +31,7 @@ class ManipulatorBaseEnv(gym.Env):
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
         super().__init__()
-        self.config = config if config else FrankaEnvConfig()
+        self.config = config
 
         if not rclpy.ok():
             rclpy.init()
@@ -52,7 +53,7 @@ class ManipulatorBaseEnv(gym.Env):
         ]
 
         self.timestep = 0
-        self.ctrl_type = None
+        self.ctrl_type = ControlType.UNDEFINED
 
         self.robot.wait_until_ready(timeout=3)
         if self.config.gripper_enabled:
@@ -93,10 +94,13 @@ class ManipulatorBaseEnv(gym.Env):
                         dtype=np.uint8,
                     )
                     for camera in self.cameras
+                    if camera.config.resolution is not None
                 },
                 "joint": gym.spaces.Box(
-                    low=np.ones((7,), dtype=np.float32) * -np.pi,
-                    high=np.ones((7,), dtype=np.float32) * np.pi,
+                    low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
+                    * -np.pi,
+                    high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
+                    * np.pi,
                     dtype=np.float32,
                 ),
                 "cartesian": gym.spaces.Box(
@@ -126,6 +130,7 @@ class ManipulatorBaseEnv(gym.Env):
         for camera in self.cameras:
             obs[f"{camera.config.camera_name}_image"] = camera.current_image
         obs["joint"] = self.robot.joint_values
+        # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
         obs["cartesian"] = np.concatenate(
             (
                 self.robot.end_effector_pose.position,
@@ -189,6 +194,10 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.timestep = 0
 
+        self.robot.reset_targets()
+        self.robot.wait_until_ready()
+        self.switch_to_default_controller()
+
         return self._get_obs(), {}
 
     def close(self):
@@ -196,24 +205,25 @@ class ManipulatorBaseEnv(gym.Env):
         self.robot.shutdown()
         super().close()
 
-    def switch_controller(self, ctrl_type: str):
+    def switch_controller(self, control_type: str | ControlType):
         """Switch the controller type.
 
+        This method switches the controller type of the robot to the specified control type.
+
         Args:
-            ctrl_type (str): Type of controller to switch to ('joint' or 'cartesian').
+            control_type (str | ControlType): The control type to switch to.
         """
-        ctrl_types = {
-            "joint": "joint_impedance_controller",
-            "cartesian": "cartesian_impedance_controller",
-        }
+        desired_ctrl_type = (
+            control_type
+            if isinstance(control_type, ControlType)
+            else ControlType.from_string(control_type)
+        )
 
-        if ctrl_type not in ctrl_types:
-            print(f"Controller {ctrl_type} not availabe.")
+        self.robot.controller_switcher_client.switch_controller(desired_ctrl_type.controller_name())
 
-            return
-
-        self.ctrl_type = ctrl_type
-        self.robot.controller_switcher_client.switch_controller(ctrl_types[self.ctrl_type])
+    def switch_to_default_controller(self):
+        """Switch to the default controller type."""
+        self.switch_controller(self.ctrl_type.controller_name())
 
     def home(self, home_config: list[float] | None = None, blocking: bool = True):
         """Move the robot to the home position.
@@ -222,18 +232,12 @@ class ManipulatorBaseEnv(gym.Env):
             home_config (list[float]): Optional home configuration for the robot.
             blocking (bool): If True, wait until the robot reaches the home position.
         """
-        current_ctrl_type = self.ctrl_type
-        if current_ctrl_type is None:
-            raise ValueError(
-                "Control type should be set in the configuration file of the environment."
-            )
-
         if self.config.gripper_enabled:
             self.gripper.open()
         self.robot.home(home_config=home_config, blocking=blocking)
 
         if not blocking:
-            self.switch_controller(current_ctrl_type)
+            self.switch_to_default_controller()
 
     def move_to(
         self, position: List | NDArray | None = None, pose: Pose | None = None, speed: float = 0.05
@@ -245,13 +249,12 @@ class ManipulatorBaseEnv(gym.Env):
             pose (iter): Optional pose (translation and rotation) to move to.
             speed (float): Speed of the movement.
         """
-        current_ctrl_type = self.ctrl_type
-        if current_ctrl_type is None:
+        if self.ctrl_type is ControlType.UNDEFINED:
             raise ValueError(
                 "Control type should be set in the configuration file of the environment."
             )
 
-        self.switch_controller("cartesian")
+        self.switch_controller(ControlType.CARTESIAN.controller_name())
 
         if pose:
             pose = Pose(
@@ -265,7 +268,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.robot.reset_targets()
         self.robot.wait_until_ready()
-        self.switch_controller(current_ctrl_type)
+        self.switch_to_default_controller()
 
 
 class ManipulatorCartesianEnv(ManipulatorBaseEnv):
@@ -274,7 +277,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
     This class is a specific implementation of the Manipulator Gym Environment for Cartesian space control.
     """
 
-    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None):
+    def __init__(self, config: ManipulatorEnvConfig, namespace: str = ""):
         """Initialize the Manipulator Cartesian Environment.
 
         Args:
@@ -283,41 +286,32 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         """
         super().__init__(namespace=namespace, config=config)
 
+        self.ctrl_type = ControlType.CARTESIAN
+
+        # TODO: Make this configurable
         self._min_z_height = 0.0
 
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
                 [
-                    -np.ones((3,), dtype=np.float32),
-                    -np.ones((3,), dtype=np.float32) * np.pi,
-                    np.zeros((1,), dtype=np.float32),
+                    -np.ones((3,), dtype=np.float32),  # Translation limits [-1, -1, -1]
+                    -np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [-pi, -pi, -pi]
+                    np.zeros((1,), dtype=np.float32),  # Gripper action (0 = close)
                 ],
                 axis=0,
             ),
             high=np.concatenate(
                 [
-                    np.ones((3,), dtype=np.float32),
-                    np.ones((3,), dtype=np.float32) * np.pi,
-                    np.ones((1,), dtype=np.float32),
+                    np.ones((3,), dtype=np.float32),  # Translation limits [1, 1, 1]
+                    np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [pi, pi, pi]
+                    np.ones((1,), dtype=np.float32),  # Gripper action (1 = open)
                 ],
                 axis=0,
             ),
             dtype=np.float32,
         )
 
-        self.switch_controller("cartesian")
-
-    def reset(
-        self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> Tuple[dict, dict]:
-        """Reset the environment."""
-        obs, info = super().reset(seed=seed, options=options)
-
-        self.robot.reset_targets()
-        self.robot.wait_until_ready()
-        self.switch_controller("cartesian")
-
-        return obs, info
+        self.switch_to_default_controller()
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
@@ -344,7 +338,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.robot.set_target(pose=target_pose)
 
         if self.config.gripper_enabled:
-            self._set_gripper_action(action[6])
+            self._set_gripper_action(action[-1])
 
         if block:
             self.control_rate.sleep()
@@ -362,44 +356,43 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     This class is a specific implementation of the Manipulator Gym Environment for Joint space control.
     """
 
-    def __init__(self, namespace: str = "", config: Optional[ManipulatorEnvConfig] = None):
+    def __init__(self, config: ManipulatorEnvConfig, namespace: str = ""):
         """Initialize the Manipulator Joint Environment.
 
         Args:
             namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
         """
-        super().__init__(namespace, config)
+        super().__init__(config=config, namespace=namespace)
 
+        self.ctrl_type = ControlType.JOINT
+
+        self.num_joints = self.config.robot_config.num_joints()
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
-                [np.ones((7,), dtype=np.float32) * -np.pi, np.zeros((1,), dtype=np.float32)], axis=0
+                [
+                    np.ones((self.num_joints,), dtype=np.float32) * -np.pi,  # Joint limits
+                    np.zeros((1,), dtype=np.float32),  # Gripper action (0 = close)
+                ],
+                axis=0,
             ),
             high=np.concatenate(
-                [np.ones((7,), dtype=np.float32) * np.pi, np.ones((1,), dtype=np.float32)], axis=0
+                [
+                    np.ones((self.num_joints,), dtype=np.float32) * np.pi,  # Joint limits
+                    np.ones((1,), dtype=np.float32),  # Gripper action (1 = open)
+                ],
+                axis=0,
             ),
             dtype=np.float32,
         )
 
-        self.switch_controller("joint")
-
-    def reset(
-        self, *, seed: int | None = None, options: dict[str, Any] | None = None
-    ) -> Tuple[dict, dict]:
-        """Reset the environment."""
-        obs, info = super().reset(seed=seed, options=options)
-
-        self.robot.reset_targets()
-        self.robot.wait_until_ready()
-        self.switch_controller("joint")
-
-        return obs, info
+        self.switch_to_default_controller()
 
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
 
         Args:
-            action (np.ndarray): Joint delta action [dtheta1, dtheta2, ..., dtheta7, gripper_action].
+            action (np.ndarray): Joint delta action [dtheta_1, dtheta_2, ..., dtheta_n, gripper_action].
             block (bool): If True, block to maintain the control rate.
 
         Returns:
@@ -415,14 +408,13 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
         # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
-
-        # target_joint = (self.robot.target_joint + action[:7] + np.pi) % (2 * np.pi) - np.pi
-        target_joint = self.robot.target_joint + action[:7]
+        # target_joint = (self.robot.target_joint + action[:, self.num_joints] + np.pi) % (2 * np.pi) - np.pi
+        target_joint = self.robot.target_joint + action[: self.num_joints]
 
         self.robot.set_target_joint(target_joint)
 
         if self.config.gripper_enabled:
-            self._set_gripper_action(action[7])
+            self._set_gripper_action(action[-1])
 
         if block:
             self.control_rate.sleep()
