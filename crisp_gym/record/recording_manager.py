@@ -11,8 +11,10 @@ from typing import Callable, Literal
 
 import numpy as np
 import rclpy
-from lerobot.common.constants import HF_LEROBOT_HOME
-from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.constants import (
+    HF_LEROBOT_HOME,
+)  # TODO: make this optional, we do not want to depend on lerobot
+from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
@@ -66,6 +68,7 @@ class RecordingManager(ABC):
         self.use_sound = use_sound
         self.episode_count = 0
 
+        # TODO: do not hardcode the queue size, make it configurable
         self.queue = mp.JoinableQueue(16)
         self.episode_count_queue = mp.Queue(1)
         self.dataset_ready = mp.Event()
@@ -186,9 +189,11 @@ class RecordingManager(ABC):
                 elif mtype == "SAVE_EPISODE":
                     if self.use_sound:
                         try:
-                            subprocess.run(
-                                "paplay /usr/share/sounds/freedesktop/stereo/complete.oga &",
-                                shell=True,
+                            subprocess.Popen(
+                                [
+                                    "paplay",
+                                    "/usr/share/sounds/freedesktop/stereo/complete.oga ",
+                                ],
                             )
                         except Exception as e:
                             logging.error(
@@ -200,13 +205,15 @@ class RecordingManager(ABC):
                 elif mtype == "DELETE_EPISODE":
                     if self.use_sound:
                         try:
-                            subprocess.run(
-                                "paplay /usr/share/sounds/freedesktop/stereo/suspend-error.oga &",
-                                shell=True,
+                            subprocess.Popen(
+                                [
+                                    "paplay",
+                                    "/usr/share/sounds/freedesktop/stereo/suspend-error.oga",
+                                ],
                             )
                         except Exception as e:
                             logging.error(
-                                f"Failed to play sound for episode completion: {e}",
+                                f"Failed to play sound for episode deletion: {e}",
                             )
 
                     dataset.clear_episode_buffer()
@@ -429,7 +436,7 @@ class ROSRecordingManager(RecordingManager):
 class KeyboardRecordingManager(RecordingManager):
     """Keyboard event listener for controlling episode recording."""
 
-    def __init__(self, **kwargs: dict) -> None:
+    def __init__(self, **kwargs) -> None:  # noqa: ANN003
         """Initialize keyboard listener with state flags."""
         super().__init__(**kwargs)
         self.listener = keyboard.Listener(on_press=self._on_press)
