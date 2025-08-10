@@ -1,6 +1,6 @@
 [project]
 name = "crisp-gym"
-version = "0.1.0"
+version = "1.0.0"
 description = "Simple gymnasium environments for crisp_py"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -8,7 +8,11 @@ dependencies = [
     "ruff>=0.11.9",
     "gymnasium>=0.26.3,<2",
     "scipy>=1.15.2,<2",
-    # "crisp_py"  TODO: add when available on pypi
+    "crisp_python>=1.3.0,<2",
+]
+authors = [
+    {name="Maximilian Dösch", email="doesch.maximilian@gmail.com"},
+    {name="Daniel San Jose Pro", email="sanjose.daniel@gmail.com"},
 ]
 
 
