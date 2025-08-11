@@ -55,6 +55,8 @@ else:
 
 previous_pose = leader.robot.end_effector_pose
 while True:
+    # NOTE: the leader pose and follower pose will drift apart over time but this is
+    #       fine assuming that we are just recording the leader's actions and not absolute positions.
     action_pose = leader.robot.end_effector_pose - previous_pose
     previous_pose = leader.robot.end_effector_pose
 

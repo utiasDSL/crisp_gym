@@ -1,0 +1,31 @@
+control_frequency: 30.0
+gripper_enabled: true
+gripper_continuous_control: true
+max_episode_steps: 1000
+
+cartesian_control_param_config: null  # Will use CRISP_CONFIG_PATH defaults
+joint_control_param_config: null      # Will use CRISP_CONFIG_PATH defaults
+
+robot_config:
+  robot_type: "franka"
+  # Optional FrankaConfig parameters - uses defaults if not specified
+  time_to_home: 5.0
+  publish_frequency: 50.0
+
+gripper_config:
+  # Will be loaded from gripper_right.yaml via GripperConfig.from_yaml()
+  from_yaml: "gripper_right.yaml"
+
+camera_configs:
+  - camera_name: "primary"
+    camera_frame: "primary_link"
+    resolution: [256, 256]
+    camera_color_image_topic: "right_third_person_camera/color/image_raw"
+    camera_color_info_topic: "right_third_person_camera/color/camera_info"
+  - camera_name: "wrist"
+    camera_frame: "wrist_link" 
+    resolution: [256, 256]
+    camera_color_image_topic: "right_wrist_camera/color/image_rect_raw"
+    camera_color_info_topic: "right_wrist_camera/color/camera_info"
+
+sensor_configs: []

@@ -13,6 +13,8 @@ import torch
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 
+from crisp_gym.util.control_type import ControlType
+
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
@@ -79,14 +81,27 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
                 env.gripper.config.max_delta,
             )
 
-        action = np.concatenate(
-            [
-                list(action_pose.position) + list(action_pose.orientation.as_euler("xyz"))
-                if env.ctrl_type == "cartesian"
-                else list(action_joint),
-                [gripper],
-            ]
-        )
+        action = None
+        if env.ctrl_type is ControlType.CARTESIAN:
+            action = np.concatenate(
+                [
+                    list(action_pose.position) + list(action_pose.orientation.as_euler("xyz")),
+                    [gripper],
+                ]
+            )
+        elif env.ctrl_type is ControlType.JOINT:
+            action = np.concatenate(
+                [
+                    action_joint,
+                    [gripper],
+                ]
+            )
+        else:
+            raise ValueError(
+                f"Unsupported control type: {env.ctrl_type}. "
+                "Supported types are 'cartesian' and 'joint'."
+            )
+
         obs, *_ = env.step(action, block=False)
         return obs, action
 

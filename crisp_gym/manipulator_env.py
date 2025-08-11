@@ -52,12 +52,15 @@ class ManipulatorBaseEnv(gym.Env):
             )
             for camera_config in self.config.camera_configs
         ]
-        self.sensors = [
+        self.sensors: List = [
             make_sensor(
+                namespace=namespace,
                 sensor_config=sensor_config,
             )
             for sensor_config in self.config.sensor_configs
         ]
+        for sensor in self.sensors:
+            print(f"Sensor topic: {sensor.config.data_topic}")
 
         self.timestep = 0
         self.ctrl_type = ControlType.UNDEFINED
@@ -67,6 +70,8 @@ class ManipulatorBaseEnv(gym.Env):
             self.gripper.wait_until_ready(timeout=3)
         for camera in self.cameras:
             camera.wait_until_ready(timeout=3)
+        for sensor in self.sensors:
+            sensor.wait_until_ready(timeout=3)
 
         if self.config.cartesian_control_param_config:
             if not os.path.exists(self.config.cartesian_control_param_config):
@@ -134,8 +139,6 @@ class ManipulatorBaseEnv(gym.Env):
                 - 'gripper': Normalized gripper state (0 = fully open, 1 = fully closed).
         """
         obs = {}
-        for camera in self.cameras:
-            obs[f"{camera.config.camera_name}_image"] = camera.current_image
         obs["joint"] = self.robot.joint_values
         # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
         obs["cartesian"] = np.concatenate(
@@ -148,6 +151,10 @@ class ManipulatorBaseEnv(gym.Env):
         obs["gripper"] = (
             1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
         )
+        for camera in self.cameras:
+            obs[f"{camera.config.camera_name}_image"] = camera.current_image
+        for sensor in self.sensors:
+            obs[f"sensor_{sensor.config.name}"] = sensor.value
         return obs
 
     def _set_gripper_action(self, action: float):

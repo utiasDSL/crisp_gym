@@ -60,7 +60,7 @@ def get_features(env_config: ManipulatorEnvConfig, ctrl_type: str = "cartesian")
 
     # Sensors
     sensor_features = {
-        f"observation.state.{sensor.name}": {
+        f"observation.state.sensor_{sensor.name}": {
             "dtype": "float32",
             "shape": sensor.shape,
             "names": [f"{sensor.name}_{i}" for i in range(sensor.shape[0])],
@@ -72,7 +72,7 @@ def get_features(env_config: ManipulatorEnvConfig, ctrl_type: str = "cartesian")
     # Action
     features["action"] = {
         "dtype": "float32",
-        "shape": len(ctrl_dims[ctrl_type]),
+        "shape": (len(ctrl_dims[ctrl_type]),),
         "names": ctrl_dims[ctrl_type],
     }
 

@@ -23,7 +23,8 @@ from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
-level = "INFO"
+# level = "INFO"
+level = "DEBUG"
 FORMAT = "%(message)s"
 logging.basicConfig(level=level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
@@ -145,6 +146,13 @@ class RecordingManager(ABC):
         camera_names = [
             name.split(".")[-1] for name in self.features if name.startswith("observation.images.")
         ]
+        sensor_names = [
+            name.split(".")[-1]
+            for name in self.features
+            if name.startswith("observation.state.sensor_")
+        ]
+        logging.debug(f"Camera names: {camera_names}")
+        logging.debug(f"Sensor names: {sensor_names}")
 
         while True:
             msg = self.queue.get()
@@ -157,6 +165,7 @@ class RecordingManager(ABC):
 
                     logging.debug(f"Received frame with action: {action} and obs: {obs.keys()}")
 
+                    # TODO: Create directly the proper dataset frame format inside of the environment
                     frame = {
                         "observation.state": np.hstack(
                             [
@@ -173,18 +182,26 @@ class RecordingManager(ABC):
                         f"observation.images.{camera_name}": obs[f"{camera_name}_image"]
                         for camera_name in camera_names
                     }
+                    sensor_frame = {
+                        f"observation.state.{sensor_name}": obs[sensor_name].astype(np.float32)
+                        for sensor_name in sensor_names
+                    }
 
                     logging.debug(f"Obs/Action frame: {frame}")
                     logging.debug(f"Camera frame: {cam_frame}")
+                    logging.debug(f"Joints frame: {joints_frame}")
+                    logging.debug(f"Sensor frame: {sensor_frame}")
 
                     frame = {
                         **frame,
                         **joints_frame,
                         **cam_frame,
+                        **sensor_frame,
                     }
 
                     dataset.add_frame(frame, task=task)
-                    logging.debug("Frame added to dataset.")
+                    buffer_size = len(getattr(dataset, "_episode_buffer", []))
+                    logging.debug(f"Frame added to dataset. Buffer now has {buffer_size} frames.")
 
                 elif mtype == "SAVE_EPISODE":
                     if self.use_sound:
@@ -194,13 +211,27 @@ class RecordingManager(ABC):
                                     "paplay",
                                     "/usr/share/sounds/freedesktop/stereo/complete.oga ",
                                 ],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
                             )
                         except Exception as e:
                             logging.error(
                                 f"Failed to play sound for episode completion: {e}",
                             )
 
+                    logging.info("Saving current episode to dataset.")
+                    # Check if there are frames in the current episode buffer
+                    if hasattr(dataset, "_episode_buffer") and len(dataset._episode_buffer) == 0:
+                        logging.warning("Episode buffer is empty. No frames to save.")
+                    else:
+                        logging.info(
+                            f"Saving episode with {len(getattr(dataset, '_episode_buffer', []))} frames."
+                        )
+
                     dataset.save_episode()
+                    logging.info(
+                        f"Episode {self.episode_count} saved to dataset.",
+                    )
 
                 elif mtype == "DELETE_EPISODE":
                     if self.use_sound:
@@ -210,6 +241,8 @@ class RecordingManager(ABC):
                                     "paplay",
                                     "/usr/share/sounds/freedesktop/stereo/suspend-error.oga",
                                 ],
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
                             )
                         except Exception as e:
                             logging.error(
@@ -274,6 +307,7 @@ class RecordingManager(ABC):
             obs, action = data_fn()
 
             if obs is None or action is None:
+                logging.debug("Data function returned None, skipping frame.")
                 # If the data function returns None, skip this frame
                 sleep_time = 1 / self.fps - (time.time() - frame_start)
                 time.sleep(sleep_time)

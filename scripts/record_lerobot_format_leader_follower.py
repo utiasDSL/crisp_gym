@@ -12,7 +12,6 @@ from crisp_gym.config.home import (
     home_close_to_table,
 )
 from crisp_gym.config.path import CRISP_CONFIG_PATH
-from crisp_gym.lerobot_wrapper import get_features
 from crisp_gym.manipulator_env import (
     ManipulatorCartesianEnv,
     ManipulatorJointEnv,
@@ -26,9 +25,8 @@ from crisp_gym.record.recording_manager import (
 from crisp_gym.teleop.teleop_robot import TeleopRobot
 from crisp_gym.teleop.teleop_robot_config import list_leader_configs, make_leader_config
 from crisp_gym.util import prompt
+from crisp_gym.util.lerobot_features import get_features
 
-FORMAT = "%(message)s"
-logging.basicConfig(level="INFO", format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -121,8 +119,18 @@ parser.add_argument(
     action="store_true",
     help="Whether to use joint control for the robot.",
 )
+parser.add_argument(
+    "--log-level",
+    type=str,
+    default="INFO",
+    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    help="Set the logging level.",
+)
 
 args = parser.parse_args()
+
+FORMAT = "%(message)s"
+logging.basicConfig(level=args.log_level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
 # Log the arguments
 logging.info("Arguments:")
@@ -189,7 +197,8 @@ try:
     leader.wait_until_ready()
 
     # TODO: @danielsanjosepro: add more features to the dataset depending on the user's needs.
-    features = get_features(env, ctrl_type=ctrl_type)
+    features = get_features(env_config=env_config, ctrl_type=ctrl_type)
+    logging.info(features)
 
     if args.recording_manager_type == "keyboard":
         recording_manager_cls = KeyboardRecordingManager
