@@ -230,7 +230,7 @@ class ManipulatorBaseEnv(gym.Env):
 
     def switch_to_default_controller(self):
         """Switch to the default controller type."""
-        self.switch_controller(self.ctrl_type.controller_name())
+        self.switch_controller(self.ctrl_type)
 
     def home(self, home_config: list[float] | None = None, blocking: bool = True):
         """Move the robot to the home position.
@@ -261,7 +261,7 @@ class ManipulatorBaseEnv(gym.Env):
                 "Control type should be set in the configuration file of the environment."
             )
 
-        self.switch_controller(ControlType.CARTESIAN.controller_name())
+        self.switch_controller(ControlType.CARTESIAN)
 
         if pose:
             pose = Pose(
