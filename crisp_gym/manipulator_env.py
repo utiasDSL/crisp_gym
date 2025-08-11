@@ -1,7 +1,7 @@
 """General manipulator environments."""
 
 import os
-from typing import Any, List, Optional, Tuple
+from typing import Any, List, Tuple
 
 import gymnasium as gym
 import numpy as np
@@ -9,6 +9,7 @@ import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
+from crisp_py.sensors.sensor import make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 
@@ -50,6 +51,12 @@ class ManipulatorBaseEnv(gym.Env):
                 config=camera_config,
             )
             for camera_config in self.config.camera_configs
+        ]
+        self.sensors = [
+            make_sensor(
+                sensor_config=sensor_config,
+            )
+            for sensor_config in self.config.sensor_configs
         ]
 
         self.timestep = 0
