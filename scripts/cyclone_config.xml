@@ -3,7 +3,7 @@
     <General>
       <AllowMulticast>true</AllowMulticast>
       <Interfaces>
-        <NetworkInterface name="enx607d0937fb24" />
+                <NetworkInterface name="${NETWORK_INTERFACE}" />
         </Interfaces>
     </General>
     <Discovery>
