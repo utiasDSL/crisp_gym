@@ -13,8 +13,18 @@ except ImportError:
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig
 
 
-def get_features(env_config: ManipulatorEnvConfig, ctrl_type: str = "cartesian") -> Dict[str, Dict]:
-    """Get the features used by LeRobotDataset."""
+def get_features(
+    env_config: ManipulatorEnvConfig,
+    ctrl_type: str = "cartesian",
+    use_video: bool = True,
+) -> Dict[str, Dict]:
+    """Get the features used by LeRobotDataset.
+
+    Args:
+        env_config (ManipulatorEnvConfig): The environment configuration for the manipulator.
+        ctrl_type (str): The type of control used, either "joint" or "cartesian". Defaults to "cartesian".
+        use_video (bool): Whether to include video features. Defaults to True.
+    """
     if not CODEBASE_VERSION.startswith("v2"):
         print(
             "WARNING: this function has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
@@ -44,24 +54,26 @@ def get_features(env_config: ManipulatorEnvConfig, ctrl_type: str = "cartesian")
         for cam in env_config.camera_configs
         if cam.resolution is not None
     }
-    video_features = {
-        f"observation.images.{cam.camera_name}": {
-            "dtype": "video",
-            "shape": (*cam.resolution, 3),
-            "names": ["height", "width", "channels"],
-            "video_info": {
-                "video.fps": 30.0,
-                "video.codec": "av1",
-                "video.pix_fmt": "yuv420p",
-                "video.is_depth_map": False,
-                "has_audio": False,
-            },
-        }
-        for cam in env_config.camera_configs
-        if cam.resolution is not None
-    }
     features.update(camera_features)
-    features.update(video_features)
+
+    if use_video:
+        video_features = {
+            f"observation.images.{cam.camera_name}": {
+                "dtype": "video",
+                "shape": (*cam.resolution, 3),
+                "names": ["height", "width", "channels"],
+                "video_info": {
+                    "video.fps": env_config.control_frequency,
+                    "video.codec": "av1",
+                    "video.pix_fmt": "yuv420p",
+                    "video.is_depth_map": False,
+                    "has_audio": False,
+                },
+            }
+            for cam in env_config.camera_configs
+            if cam.resolution is not None
+        }
+        features.update(video_features)
 
     # Propioceptive
     features["observation.state.joint"] = {
