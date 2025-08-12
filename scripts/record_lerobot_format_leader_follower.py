@@ -176,6 +176,7 @@ try:
 
     # Prepare the Follower Environment
     env_config = make_env_config(args.follower_config, control_frequency=args.fps)
+    logging.debug(f"Using follower environment configuration: {env_config}")
 
     if args.use_close_home:
         env_config.robot_config.home_config = home_close_to_table

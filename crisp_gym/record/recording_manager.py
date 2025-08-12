@@ -134,8 +134,9 @@ class RecordingManager(ABC):
                 fps=self.fps,
                 robot_type=self.robot_type,
                 features=self.features,
-                use_videos=False,
+                use_videos=True,
             )
+            logging.debug(f"Dataset created with meta: {dataset.meta}")
         return dataset
 
     def _writer_proc(self):

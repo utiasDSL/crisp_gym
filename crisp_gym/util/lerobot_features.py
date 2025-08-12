@@ -44,7 +44,24 @@ def get_features(env_config: ManipulatorEnvConfig, ctrl_type: str = "cartesian")
         for cam in env_config.camera_configs
         if cam.resolution is not None
     }
+    video_features = {
+        f"observation.images.{cam.camera_name}": {
+            "dtype": "video",
+            "shape": (*cam.resolution, 3),
+            "names": ["height", "width", "channels"],
+            "video_info": {
+                "video.fps": 30.0,
+                "video.codec": "av1",
+                "video.pix_fmt": "yuv420p",
+                "video.is_depth_map": False,
+                "has_audio": False,
+            },
+        }
+        for cam in env_config.camera_configs
+        if cam.resolution is not None
+    }
     features.update(camera_features)
+    features.update(video_features)
 
     # Propioceptive
     features["observation.state.joint"] = {
