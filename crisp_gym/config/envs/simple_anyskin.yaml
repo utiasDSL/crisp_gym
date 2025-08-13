@@ -1,0 +1,25 @@
+control_frequency: 30.0
+gripper_enabled: false  # NOTE: No gripper!
+max_episode_steps: 1000
+
+cartesian_control_param_config: null
+joint_control_param_config: null
+
+robot_config:
+  robot_type: "franka"
+  time_to_home: 3.0
+  publish_frequency: 50.0
+
+gripper_config:
+  from_yaml: "gripper_right.yaml"
+
+camera_configs:
+  - camera_name: "anyskin"
+    resolution: [256, 256]
+    camera_color_image_topic: "/anyskin/image_raw"
+    camera_color_info_topic: "/anyskin/camera_info"
+
+sensor_configs:
+  - sensor_type: "float32"
+    name: "anyskin"
+    data_topic: "/anyskin/tactile_data"
