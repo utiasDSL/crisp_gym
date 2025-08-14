@@ -23,8 +23,8 @@ from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
-# level = "INFO"
-level = "DEBUG"
+level = "INFO"
+# level = "DEBUG"
 FORMAT = "%(message)s"
 logging.basicConfig(level=level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
 
