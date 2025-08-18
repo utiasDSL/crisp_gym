@@ -13,7 +13,7 @@ from crisp_py.sensors.sensor import make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 
-from crisp_gym.manipulator_env_config import ManipulatorEnvConfig
+from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
 
 
@@ -438,3 +438,38 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         obs = self._get_obs()
 
         return obs, reward, terminated, truncated, info
+
+
+
+def make_env(
+    env_type: str, 
+    control_type: str = "cartesian", 
+    namespace: str = "", 
+    config_path: str | None = None,
+    **config_overrides,
+) -> ManipulatorBaseEnv:
+    """Create a manipulator environment instance using the specified configuration.
+
+    Args:
+        env_type (str): The name of the environment configuration to use.
+        control_type (str): The control type ("cartesian" or "joint"). Defaults to "cartesian".
+        namespace (str): Namespace for the robot. Defaults to "".
+        config_path (str | None): Optional path to YAML config file.
+        **config_overrides: Additional parameters to override configuration defaults.
+
+    Returns:
+        ManipulatorBaseEnv: A fully initialized manipulator environment instance.
+
+    Raises:
+        ValueError: If the specified environment type or control type is not supported.
+    """
+    config = make_env_config(env_type, config_path=config_path, **config_overrides)
+    
+    if control_type.lower() == "cartesian":
+        return ManipulatorCartesianEnv(config=config, namespace=namespace)
+    elif control_type.lower() == "joint":
+        return ManipulatorJointEnv(config=config, namespace=namespace)
+    else:
+        raise ValueError(
+            f"Unsupported control type: {control_type}. Supported types are: 'cartesian', 'joint'"
+        )
