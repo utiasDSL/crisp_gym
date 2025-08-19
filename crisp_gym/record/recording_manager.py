@@ -523,3 +523,16 @@ class KeyboardRecordingManager(RecordingManager):
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001, D105
         self.listener.stop()
         super().__exit__(exc_type, exc_value, traceback)
+
+
+def make_recording_manager(
+    recording_manager_type: Literal["keyboard", "ros"],
+    **kwargs: dict,
+) -> RecordingManager:
+    """Factory function to create a recording manager."""
+    if recording_manager_type == "keyboard":
+        return KeyboardRecordingManager(**kwargs)
+    elif recording_manager_type == "ros":
+        return ROSRecordingManager(**kwargs)
+    else:
+        raise ValueError(f"Unknown recording manager type: {recording_manager_type}")

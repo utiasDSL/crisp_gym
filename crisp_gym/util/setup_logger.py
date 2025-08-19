@@ -10,8 +10,10 @@ def setup_logging(level=logging.INFO):
     import logging
 
     handler = RichHandler()
-    formatter = logging.Formatter("%(name)s - %(levelname)s - %(message)s")
+    formatter = logging.Formatter(fmt="%(message)s", datefmt="[%X]")
     handler.setFormatter(formatter)
+
+    handlers = [RichHandler(rich_tracebacks=True)]
     root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(level)

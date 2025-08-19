@@ -5,36 +5,26 @@ import logging
 import time
 from multiprocessing import Pipe, Process
 
-from rich.logging import RichHandler
-
 import crisp_gym  # noqa: F401
-from crisp_gym.config.home import (
-    home_close_to_table,
-)
-from crisp_gym.lerobot_wrapper import get_features
-from crisp_gym.manipulator_env import (
-    ManipulatorCartesianEnv,
-    ManipulatorJointEnv,
-)
-from crisp_gym.manipulator_env_config import list_env_configs, make_env_config
+from crisp_gym.manipulator_env import make_env
+from crisp_gym.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import inference_worker, make_policy_fn
-from crisp_gym.record.recording_manager import (
-    KeyboardRecordingManager,
-    ROSRecordingManager,
-)
+from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
+from crisp_gym.util.lerobot_features import get_features
+from crisp_gym.util.setup_logger import setup_logging
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
     "--repo-id",
     type=str,
-    default="franka_single",
+    default="test",
     help="Repository ID for the dataset",
 )
 parser.add_argument(
     "--robot-type",
     type=str,
-    default="aloha_franka",
+    default="franka",
     help="Type of robot being used.",
 )
 parser.add_argument(
@@ -68,17 +58,6 @@ parser.add_argument(
     help="Type of recording manager to use. Currently only 'keyboard' and 'ros' are supported.",
 )
 parser.add_argument(
-    "--time-to-home",
-    type=float,
-    default=3.0,
-    help="Time needed to home.",
-)
-parser.add_argument(
-    "--use-close-home",
-    action="store_true",
-    help="Whether to use the close home configuration for the robot.",
-)
-parser.add_argument(
     "--joint-control",
     action="store_true",
     help="Whether to use joint control for the robot.",
@@ -97,22 +76,21 @@ parser.add_argument(
     help="Path to save the recordings.",
 )
 parser.add_argument(
-    "--follower-config",
+    "--env-config",
     type=str,
     default=None,
     help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
 )
 parser.add_argument(
-    "--follower-namespace",
+    "--env-namespace",
     type=str,
     default=None,
     help="Namespace for the follower robot. This is used to identify the robot in the ROS ecosystem.",
 )
 
-args = parser.parse_args()
 
-FORMAT = "%(message)s"
-logging.basicConfig(level=args.log_level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+args = parser.parse_args()
+setup_logging(args.log_level)
 
 logging.info("-" * 40)
 logging.info("Arguments:")
@@ -143,52 +121,32 @@ if args.path is None:
         exit(1)
 
 
-if args.follower_namespace is None:
-    args.follower_namespace = prompt.prompt(
+if args.env_namespace is None:
+    args.env_namespace = prompt.prompt(
         "Please enter the follower robot namespace (e.g., 'left', 'right', ...)",
         default="right",
     )
-    logging.info(f"Using follower namespace: {args.follower_namespace}")
+    logging.info(f"Using follower namespace: {args.env_namespace}")
 
-if args.follower_config is None:
+if args.env_config is None:
     follower_configs = list_env_configs()
-    args.follower_config = prompt.prompt(
+    args.env_config = prompt.prompt(
         "Please enter the follower robot configuration name.",
         options=follower_configs,
         default=follower_configs[0],
     )
-    logging.info(f"Using follower configuration: {args.follower_config}")
+    logging.info(f"Using follower configuration: {args.env_config}")
 
-# Set up the config for the environment
+
 ctrl_type = "cartesian" if not args.joint_control else "joint"
-
-# %% Prepare the Follower Environment
-env_config = make_env_config(args.follower_config, control_frequency=args.fps)
-if args.use_close_home:
-    env_config.robot_config.home_config = home_close_to_table
-    env_config.robot_config.time_to_home = args.time_to_home
-
-env = (
-    ManipulatorCartesianEnv(namespace=args.follower_namespace, config=env_config)
-    if ctrl_type == "cartesian"
-    else ManipulatorJointEnv(namespace=args.follower_namespace, config=env_config)
-)
+env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
 
 # %% Prepare the dataset
-features = get_features(env, ctrl_type=ctrl_type)
+features = get_features(env.config, ctrl_type=ctrl_type)
 
 
-if args.recording_manager_type == "keyboard":
-    recording_manager_cls = KeyboardRecordingManager
-elif args.recording_manager_type == "ros":
-    recording_manager_cls = ROSRecordingManager
-else:
-    raise ValueError(
-        f"Unsupported recording manager type: {args.recording_manager_type}. "
-        "Currently only 'keyboard' and 'ros' are supported."
-    )
-
-recording_manager = recording_manager_cls(
+recording_manager = make_recording_manager(
+    recording_manager_type=args.recording_manager_type,
     features=features,
     repo_id=args.repo_id,
     robot_type=args.robot_type,
