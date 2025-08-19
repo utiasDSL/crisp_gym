@@ -3,7 +3,7 @@
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Robot
 
-from crisp_gym.teleop.teleop_robot_config import TeleopRobotConfig
+from crisp_gym.teleop.teleop_robot_config import TeleopRobotConfig, make_leader_config
 
 
 class TeleopRobot:
@@ -55,3 +55,20 @@ class TeleopRobot:
 
         if self.gripper is not None and not self.config.disable_gripper_torque:
             self.gripper.disable_torque()
+
+
+def make_leader(name: str, namespace: str = "") -> TeleopRobot:
+    """Create a TeleopRobot instance using the specified configuration.
+
+    Args:
+        name (str): The name of the robot configuration to use.
+        namespace (str, optional): Namespace for the leader robot. Defaults to "".
+
+    Returns:
+        TeleopRobot: A fully initialized TeleopRobot instance.
+
+    Raises:
+        ValueError: If the specified robot configuration name is not supported.
+    """
+    config = make_leader_config(name)
+    return TeleopRobot(config=config, namespace=namespace)

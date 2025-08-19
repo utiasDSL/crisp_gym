@@ -8,6 +8,5 @@ __pycache__
 build/lib
 pixi.lock
 scripts/set_env.sh
-scripts/cyclone_config.xml
 outputs/
 models/

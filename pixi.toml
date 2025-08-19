@@ -4,7 +4,6 @@ authors = ["Maximilian Dösch <doesch.maximilian@gmail.com>"]
 channels = ["https://fast.prefix.dev/conda-forge"]
 name = "crisp_gym"
 platforms = ["linux-64"]
-version = "0.1.0"
 
 [activation]
 scripts = [
@@ -69,7 +68,7 @@ ros-jazzy-rmw-cyclonedds-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-crisp_py = { path = "../crisp_py", editable = false }  # TODO: Move to pyproject.toml when available in pypi
+# crisp_python = { path = "../crisp_py", editable = false }
 
 [tasks]
 configure = "bash scripts/configure.sh"

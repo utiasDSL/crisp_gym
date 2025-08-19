@@ -1,60 +1,73 @@
 """Example on how to teleoperate a robot using another one."""
 
+import argparse
+import logging
 import time
 
 import numpy as np
 
-from crisp_gym.config.home import home_close_to_table
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import make_env_config
-from crisp_gym.teleop.teleop_robot import TeleopRobot
-from crisp_gym.teleop.teleop_robot_config import make_leader_config
+from crisp_gym.manipulator_env import make_env
+from crisp_gym.teleop.teleop_robot import make_leader
+from crisp_gym.util.setup_logger import setup_logging
 
-try:
-    from rich import print
-except ImportError:
-    pass
+# Parse args:
+parser = argparse.ArgumentParser(description="Teleoperation of a leader robot.")
+parser.add_argument(
+    "--use-force-feedback",
+    action="store_true",
+    help="Use force feedback from the leader robot (default: False)",
+)
+parser.add_argument(
+    "--log-level",
+    type=str,
+    default="INFO",
+    choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+    help="Set the logging level (default: INFO)",
+)
+parser.add_argument(
+    "--control-frequency",
+    type=float,
+    default=100.0,
+    help="Control frequency in Hz (default: 100.0)",
+)
 
-USE_FORCE_FEEDBACK = True  # Set to True if you want to use force feedback from the leader robot
+
+args = parser.parse_args()
+
+# Set up logging
+setup_logging(level=args.log_level)
+logger = logging.getLogger(__name__)
 
 # %% Leader setup
-print("Setting up leader robot...")
-leader_config = make_leader_config("left_aloha_franka")
-# leader_config.leader.home_config = home_front_up
-leader_config.leader.home_config = home_close_to_table
-leader_config.leader_gripper.publish_frequency = 30.0
-leader_config.leader_gripper.max_delta = 0.15
-leader = TeleopRobot(config=leader_config)
+logger.info("Setting up leader robot...")
+leader = make_leader(name="left_aloha_franka", namespace="left")
 leader.wait_until_ready()
-leader.gripper.disable_torque()
-
-time.sleep(1.0)  # Wait for the gripper to disable torque
-
-leader.robot.home(blocking=True)
+leader.prepare_for_teleop()
 
 # %% Environment setup
-print("Setting up environment...")
-env_config = make_env_config("right_no_cam_franka", control_frequency=200.0)
-env_config.robot_config.home_config = home_close_to_table
-env = ManipulatorCartesianEnv(namespace="right", config=env_config)
-
-env.home()
+logger.info("Setting up environment...")
+env = make_env("right_no_cam_franka", control_type="cartesian", namespace="right")
+env.robot.home()
 env.reset()
 
 # %% Now run the teleoperation loop
-print("[green bold]Starting teleoperation...")
+logger.info(":rocket: Starting teleoperation...")
 
-if USE_FORCE_FEEDBACK:
+if args.use_force_feedback:
     leader.robot.controller_switcher_client.switch_controller("torque_feedback_controller")
 else:
     leader.robot.cartesian_controller_parameters_client.load_param_config(
-        file_path=leader_config.gravity_compensation_controller
+        file_path=leader.config.gravity_compensation_controller
     )
     leader.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
 
 
 previous_pose = leader.robot.end_effector_pose
+
 while True:
+    # NOTE: the leader pose and follower pose will drift apart over time but this is
+    #       fine assuming that we are just recording the leader's actions and not absolute positions.
+
     action_pose = leader.robot.end_effector_pose - previous_pose
     previous_pose = leader.robot.end_effector_pose
 
@@ -62,7 +75,8 @@ while True:
         [
             action_pose.position,
             action_pose.orientation.as_euler("xyz"),
-            [leader.gripper.value],
+            np.array([leader.gripper.value if leader.gripper else 0.0]),
         ]
     )
-    obs, *_ = env.step(action, block=True)
+    obs, *_ = env.step(action, block=False)
+    time.sleep(1.0 / args.control_frequency)

@@ -1,0 +1,26 @@
+control_frequency: 30.0
+gripper_enabled: true
+gripper_continuous_control: false
+
+cartesian_control_param_config: null
+joint_control_param_config: null
+
+robot_config:
+  robot_type: "franka"
+
+gripper_config:
+  min_value: 0
+  max_value: 1
+  command_topic: "gripper/gripper_position_controller/commands"
+  joint_state_topic: "gripper/joint_states"
+  reboot_service: "gripper/reboot_gripper"
+  enable_torque_service: "gripper/dynamixel_hardware_interface/set_dxl_torque"
+
+camera_configs:
+  - camera_name: "camera"
+    camera_frame: "wrist_link"
+    resolution: [256, 256]
+    camera_color_image_topic: "camera/wrist_camera/color/image_rect_raw"
+    camera_color_info_topic: "camera/wrist_camera/color/camera_info"
+
+sensor_configs: []

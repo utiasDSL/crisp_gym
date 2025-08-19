@@ -1,0 +1,17 @@
+control_frequency: 30.0
+gripper_enabled: false
+gripper_continuous_control: true
+gripper_threshold: 0.1
+
+cartesian_control_param_config: null
+joint_control_param_config: null
+
+robot_config:
+  robot_type: "franka"
+
+gripper_config:
+  min_value: 0
+  max_value: 1
+
+camera_configs: []
+sensor_configs: []
