@@ -1,5 +1,6 @@
 """General manipulator environments."""
 
+import logging
 import os
 from pathlib import Path
 from typing import Any, List, Tuple
@@ -16,8 +17,6 @@ from scipy.spatial.transform import Rotation
 
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
-
-import logging
 
 logger = logging.getLogger(__name__)
 

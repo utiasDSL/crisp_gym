@@ -10,9 +10,9 @@ except ImportError:
         "Please use a lerobot environment 'pixi shell -e <rosdistro>-lerobot'."
     )
 
-from crisp_gym.manipulator_env_config import ManipulatorEnvConfig
-
 import logging
+
+from crisp_gym.manipulator_env_config import ManipulatorEnvConfig
 
 logger = logging.getLogger(__name__)
 
