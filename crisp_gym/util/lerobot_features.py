@@ -12,6 +12,10 @@ except ImportError:
 
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 def get_features(
     env_config: ManipulatorEnvConfig,
@@ -26,8 +30,8 @@ def get_features(
         use_video (bool): Whether to include video features. Defaults to True.
     """
     if not CODEBASE_VERSION.startswith("v2"):
-        print(
-            "WARNING: this function has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
+        logger.warn(
+            "Feature generation for LeRobot has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
         )
 
     ctrl_dims = {

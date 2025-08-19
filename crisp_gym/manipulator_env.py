@@ -1,6 +1,7 @@
 """General manipulator environments."""
 
 import os
+from pathlib import Path
 from typing import Any, List, Tuple
 
 import gymnasium as gym
@@ -15,6 +16,10 @@ from scipy.spatial.transform import Rotation
 
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ManipulatorBaseEnv(gym.Env):
@@ -60,11 +65,13 @@ class ManipulatorBaseEnv(gym.Env):
             for sensor_config in self.config.sensor_configs
         ]
         for sensor in self.sensors:
-            print(f"Sensor topic: {sensor.config.data_topic}")
+            logger.debug(f"Sensor topic: {sensor.config.data_topic}")
 
         self.timestep = 0
         self.ctrl_type = ControlType.UNDEFINED
 
+        logger.debug(f"ManipulatorBaseEnv initialized with config: {self.config}")
+        logger.debug("Waiting for robot, gripper, cameras, and sensors to be ready...")
         self.robot.wait_until_ready(timeout=3)
         if self.config.gripper_enabled:
             self.gripper.wait_until_ready(timeout=3)
@@ -72,6 +79,7 @@ class ManipulatorBaseEnv(gym.Env):
             camera.wait_until_ready(timeout=3)
         for sensor in self.sensors:
             sensor.wait_until_ready(timeout=3)
+        logger.debug("*Robot, gripper, cameras, and sensors are ready.*")
 
         if self.config.cartesian_control_param_config:
             if not os.path.exists(self.config.cartesian_control_param_config):
@@ -440,13 +448,12 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         return obs, reward, terminated, truncated, info
 
 
-
 def make_env(
-    env_type: str, 
-    control_type: str = "cartesian", 
-    namespace: str = "", 
-    config_path: str | None = None,
-    **config_overrides,
+    env_type: str,
+    control_type: str = "cartesian",
+    namespace: str = "",
+    config_path: Path | str | None = None,
+    **config_overrides,  # noqa: ANN003
 ) -> ManipulatorBaseEnv:
     """Create a manipulator environment instance using the specified configuration.
 
@@ -464,7 +471,7 @@ def make_env(
         ValueError: If the specified environment type or control type is not supported.
     """
     config = make_env_config(env_type, config_path=config_path, **config_overrides)
-    
+
     if control_type.lower() == "cartesian":
         return ManipulatorCartesianEnv(config=config, namespace=namespace)
     elif control_type.lower() == "joint":

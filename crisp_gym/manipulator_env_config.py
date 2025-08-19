@@ -276,7 +276,7 @@ class NoCamNoGripperFrankaEnvConfig(FrankaEnvConfig):
 
 def make_env_config(
     env_type: str,
-    config_path: Path | None = None,
+    config_path: Path | str | None = None,
     **overrides,  # noqa: ANN003
 ) -> ManipulatorEnvConfig:
     """Factory function to create an environment configuration based on the type.
@@ -307,6 +307,7 @@ def make_env_config(
             )
 
     if config_path:
+        config_path = Path(config_path) if isinstance(config_path, str) else config_path
         return config_class.from_yaml(config_path, **overrides)
 
     return config_class(**overrides)
