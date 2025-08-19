@@ -24,6 +24,7 @@ leader_config = make_leader_config("left_aloha_franka")
 leader_config.leader.home_config = home_close_to_table
 leader_config.leader_gripper.publish_frequency = 30.0
 leader_config.leader_gripper.max_delta = 0.15
+
 leader = TeleopRobot(config=leader_config)
 leader.wait_until_ready()
 leader.gripper.disable_torque()

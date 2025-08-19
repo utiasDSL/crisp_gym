@@ -27,7 +27,6 @@ from crisp_gym.teleop.teleop_robot_config import list_leader_configs, make_leade
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 
-
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
     "--repo-id",

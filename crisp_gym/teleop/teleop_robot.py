@@ -25,7 +25,6 @@ class TeleopRobot:
         self.robot = Robot(
             robot_config=config.leader, namespace=config.leader_namespace or namespace
         )
-        config.leader_gripper.index = 0
         if config.leader_gripper is not None:
             self.gripper = Gripper(
                 gripper_config=config.leader_gripper,

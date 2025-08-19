@@ -57,7 +57,7 @@ class LeftAlohaFrankaTeleopRobotConfig(TeleopRobotConfig):
     )
 
     leader_namespace: str = "left"
-    leader_gripper_namespace: str = "left/gripper"
+    leader_gripper_namespace: str = "left/trigger"
 
 
 @dataclass
@@ -65,7 +65,7 @@ class RightAlohaFrankaTeleopRobotConfig(TeleopRobotConfig):
     """Configuration for the right robot as a leader."""
 
     leader: RobotConfig = field(default_factory=lambda: FrankaConfig())
-    leader_gripper: GripperConfig = field(
+    leader_gripper: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(CRISP_CONFIG_PATH / "gripper_right.yaml").resolve()
         )
