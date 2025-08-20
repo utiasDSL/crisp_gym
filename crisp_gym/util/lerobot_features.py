@@ -1,4 +1,8 @@
-"""Wrapper to convert the outputs of the step function to the proper LeRobotDataset expected format."""
+"""This module provides a function to generate features for the LeRobotDataset.
+
+It defines the features used by the dataset, including camera images, proprioceptive state,
+sensors, and actions based on the environment configuration and control type.
+"""
 
 from typing import Dict
 
@@ -90,6 +94,19 @@ def get_features(
         "shape": (len(ctrl_dims["cartesian"]),),
         "names": ctrl_dims["cartesian"],
     }
+    features["observation.state.target"] = (
+        {
+            "dtype": "float32",
+            "shape": (len(ctrl_dims["cartesian"]) - 1,),  # Exclude gripper
+            "names": ctrl_dims["cartesian"][:-1],  # Exclude gripper
+        }
+        if ctrl_type == "cartesian"
+        else {
+            "dtype": "float32",
+            "shape": (len(ctrl_dims["joint"]) - 1,),  # Exclude gripper
+            "names": ctrl_dims["joint"][:-1],  # Exclude gripper
+        }
+    )
 
     # Sensors
     sensor_features = {
