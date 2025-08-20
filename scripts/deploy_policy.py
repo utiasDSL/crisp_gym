@@ -159,6 +159,7 @@ if args.evaluate:
     )
 else:
     evaluation_file = "evaluation_results.csv"
+
 try:
     ctrl_type = "cartesian" if not args.joint_control else "joint"
     env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)

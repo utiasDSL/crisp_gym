@@ -15,6 +15,7 @@ import rclpy
 # TODO: make this optional, we do not want to depend on lerobot
 from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
@@ -171,6 +172,14 @@ class RecordingManager(ABC):
                             ]
                         ).astype(np.float32),
                         "action": action.astype(np.float32),
+                    }
+                    target_frame = {
+                        "observation.state.target": np.hstack(
+                            [
+                                obs["target_cartesian"],
+                                obs["target_gripper"],
+                            ]
+                        ).astype(np.float32),
                     }
                     joints_frame = {
                         "observation.state.joint": obs["joint"].astype(np.float32),

@@ -27,6 +27,7 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, List, Tuple
+from typing_extensions import override
 
 import gymnasium as gym
 import numpy as np
@@ -209,6 +210,7 @@ class ManipulatorBaseEnv(gym.Env):
             ):
                 self.gripper.open()
 
+    @override
     def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment.
 
@@ -230,6 +232,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
+    @override
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> Tuple[dict, dict]:
@@ -244,6 +247,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         return self._get_obs(), {}
 
+    @override
     def close(self):
         """Close the environment."""
         self.robot.shutdown()
@@ -335,6 +339,16 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         # TODO: Make this configurable
         self._min_z_height = 0.0
 
+        self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+            {
+                **self.observation_space.spaces,
+                "target": gym.spaces.Box(
+                    low=np.ones((6,), dtype=np.float32) * -np.pi,
+                    high=np.ones((6,), dtype=np.float32) * np.pi,
+                    dtype=np.float32,
+                ),
+            },
+        )
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
                 [
@@ -357,6 +371,20 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.switch_to_default_controller()
 
+    @override
+    def _get_obs(self) -> dict:
+        obs = super()._get_obs()
+        # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
+        obs["target"] = np.concatenate(
+            (
+                self.robot.target_pose.position,
+                self.robot.target_pose.orientation.as_euler("xyz"),
+            ),
+            axis=0,
+        )
+        return obs
+
+    @override
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
 
@@ -412,6 +440,19 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.ctrl_type = ControlType.JOINT
 
         self.num_joints = self.config.robot_config.num_joints()
+
+        # We add the target to the observation space to allow the agent to learn the target joint positions.
+        self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+            {
+                **self.observation_space.spaces,
+                "target": gym.spaces.Box(
+                    low=np.ones((self.num_joints,), dtype=np.float32) * -np.pi,
+                    high=np.ones((self.num_joints,), dtype=np.float32) * np.pi,
+                    dtype=np.float32,
+                ),
+            },
+        )
+
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
                 [
@@ -432,6 +473,13 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
 
         self.switch_to_default_controller()
 
+    @override
+    def _get_obs(self) -> dict:
+        obs = super()._get_obs()
+        obs["target"] = self.robot.target_joint
+        return obs
+
+    @override
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
 

@@ -219,7 +219,7 @@ def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable
         try:
             env.step(action, block=False)
         except Exception as e:
-            logging.error(f"Error during environment step: {e}")
+            logging.exception(f"Error during environment step: {e}")
 
         return obs_raw, action
 
