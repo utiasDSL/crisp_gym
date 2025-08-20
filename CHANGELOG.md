@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/utiasDSL/crisp_gym/compare/v2.0.0...v2.0.1) (2025-08-20)
+
+
+### Bug Fixes
+
+* hotfix logging in record in new version ([b4ed37e](https://github.com/utiasDSL/crisp_gym/commit/b4ed37ed5bcee749e42c17dd6723f64d681ea5b7))
+
 ## [2.0.0](https://github.com/utiasDSL/crisp_gym/compare/v1.0.0...v2.0.0) (2025-08-19)
 
 
