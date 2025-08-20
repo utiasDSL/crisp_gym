@@ -236,15 +236,15 @@ try:
 
     logger.info("Finished recording.")
 
-except TimeoutError:
-    logger.exception("Timeout error occurred during recording.")
+except TimeoutError as e:
+    logger.exception(f"Timeout error occurred during recording: {e}.")
     logger.error(
         "Please check if the robot container is running and the namespace is correct."
         "\nYou can check the topics using `ros2 topic list` command."
     )
 
-except Exception:
-    logger.exception("An error occurred during recording.")
+except Exception as e:
+    logger.exception(f"An error occurred during recording: {e}.")
 
 finally:
     if rclpy.ok():
