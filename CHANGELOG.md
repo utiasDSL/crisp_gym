@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/utiasDSL/crisp_gym/compare/v2.0.1...v2.0.2) (2025-08-20)
+
+
+### Bug Fixes
+
+* release type was wrong for please release bot ([977ff20](https://github.com/utiasDSL/crisp_gym/commit/977ff20ef617252727a6c0895e43b9d029b525b2))
+
 ## [2.0.1](https://github.com/utiasDSL/crisp_gym/compare/v2.0.0...v2.0.1) (2025-08-20)
 
 
