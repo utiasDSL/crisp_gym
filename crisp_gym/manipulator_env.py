@@ -1,4 +1,27 @@
-"""General manipulator environments."""
+"""General manipulator environments.
+
+To use an environment, you can use the `make_env` function to create an instance of the desired environment type.
+
+Example:
+```python
+from crisp_gym import make_env
+
+env = make_env(
+    env_type="manipulator_cartesian",
+    control_type="cartesian",
+    namespace="robot_namespace",
+)
+
+env.wait_until_ready()  # Wait for the environment to be ready i.e. received all information from the robot, gripper, cameras, and sensors.
+
+obs, info = env.reset()  # Reset the environment to the initial state
+while True:
+    action = policy.sample_action(obs)
+    obs, reward, terminated, truncated, info = env.step(action)
+```
+
+
+"""
 
 import logging
 import os

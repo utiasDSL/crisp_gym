@@ -11,22 +11,18 @@ from typing import Callable, Literal
 
 import numpy as np
 import rclpy
-from lerobot.constants import (
-    HF_LEROBOT_HOME,
-)  # TODO: make this optional, we do not want to depend on lerobot
+
+# TODO: make this optional, we do not want to depend on lerobot
+from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
-from rich.logging import RichHandler
 from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
-level = "INFO"
-# level = "DEBUG"
-FORMAT = "%(message)s"
-logging.basicConfig(level=level, format=FORMAT, datefmt="[%X]", handlers=[RichHandler()])
+logger = logging.getLogger(__name__)
 
 
 class RecordingManager(ABC):
@@ -108,24 +104,24 @@ class RecordingManager(ABC):
 
     def _create_dataset(self) -> LeRobotDataset:
         """Factory function to create a dataset object."""
-        logging.debug("Creating dataset object.")
+        logger.debug("Creating dataset object.")
         if self.resume:
-            logging.info(f"Resuming recording from existing dataset: {self.repo_id}")
+            logger.info(f"Resuming recording from existing dataset: {self.repo_id}")
             dataset = LeRobotDataset(repo_id=self.repo_id)
             if self.num_episodes <= dataset.num_episodes:
-                logging.error(
+                logger.error(
                     f"The dataset already has {dataset.num_episodes} recorded. Please select a larger number."
                 )
                 exit()
-            logging.info(
+            logger.info(
                 f"Resuming from episode {dataset.num_episodes} with {self.num_episodes} episodes to record."
             )
             self.episode_count_queue.put(dataset.num_episodes - 1)
         else:
-            logging.info(f"[green]Creating new dataset: {self.repo_id}", extra={"markup": True})
+            logger.info(f"[green]Creating new dataset: {self.repo_id}", extra={"markup": True})
             # Clean up existing dataset if it exists
             if Path(HF_LEROBOT_HOME / self.repo_id).exists():
-                logging.error(
+                logger.error(
                     f"The repo_id already exists. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise remove it:\n'rm -r {str(Path(HF_LEROBOT_HOME / self.repo_id))}'."
                 )
                 exit()
@@ -136,12 +132,12 @@ class RecordingManager(ABC):
                 features=self.features,
                 use_videos=True,
             )
-            logging.debug(f"Dataset created with meta: {dataset.meta}")
+            logger.debug(f"Dataset created with meta: {dataset.meta}")
         return dataset
 
     def _writer_proc(self):
         """Process to write data to the dataset."""
-        logging.info("Starting dataset writer process.")
+        logger.info("Starting dataset writer process.")
         dataset = self._create_dataset()
         self.dataset_ready.set()
         camera_names = [
@@ -152,19 +148,19 @@ class RecordingManager(ABC):
             for name in self.features
             if name.startswith("observation.state.sensor_")
         ]
-        logging.debug(f"Camera names: {camera_names}")
-        logging.debug(f"Sensor names: {sensor_names}")
+        logger.debug(f"Camera names: {camera_names}")
+        logger.debug(f"Sensor names: {sensor_names}")
 
         while True:
             msg = self.queue.get()
-            logging.debug(f"Received message: {msg['type']}")
+            logger.debug(f"Received message: {msg['type']}")
             try:
                 mtype = msg["type"]
 
                 if mtype == "FRAME":
                     obs, action, task = msg["data"]
 
-                    logging.debug(f"Received frame with action: {action} and obs: {obs.keys()}")
+                    logger.debug(f"Received frame with action: {action} and obs: {obs.keys()}")
 
                     # TODO: Create directly the proper dataset frame format inside of the environment
                     frame = {
@@ -188,10 +184,10 @@ class RecordingManager(ABC):
                         for sensor_name in sensor_names
                     }
 
-                    logging.debug(f"Obs/Action frame: {frame}")
-                    logging.debug(f"Camera frame: {cam_frame}")
-                    logging.debug(f"Joints frame: {joints_frame}")
-                    logging.debug(f"Sensor frame: {sensor_frame}")
+                    logger.debug(f"Obs/Action frame: {frame}")
+                    logger.debug(f"Camera frame: {cam_frame}")
+                    logger.debug(f"Joints frame: {joints_frame}")
+                    logger.debug(f"Sensor frame: {sensor_frame}")
 
                     frame = {
                         **frame,
@@ -202,7 +198,7 @@ class RecordingManager(ABC):
 
                     dataset.add_frame(frame, task=task)
                     buffer_size = len(getattr(dataset, "_episode_buffer", []))
-                    logging.debug(f"Frame added to dataset. Buffer now has {buffer_size} frames.")
+                    logger.debug(f"Frame added to dataset. Buffer now has {buffer_size} frames.")
 
                 elif mtype == "SAVE_EPISODE":
                     if self.use_sound:
@@ -216,21 +212,21 @@ class RecordingManager(ABC):
                                 stderr=subprocess.DEVNULL,
                             )
                         except Exception as e:
-                            logging.error(
+                            logger.error(
                                 f"Failed to play sound for episode completion: {e}",
                             )
 
-                    logging.info("Saving current episode to dataset.")
+                    logger.info("Saving current episode to dataset.")
                     # Check if there are frames in the current episode buffer
                     if hasattr(dataset, "_episode_buffer") and len(dataset._episode_buffer) == 0:
-                        logging.warning("Episode buffer is empty. No frames to save.")
+                        logger.warning("Episode buffer is empty. No frames to save.")
                     else:
-                        logging.info(
+                        logger.info(
                             f"Saving episode with {len(getattr(dataset, '_episode_buffer', []))} frames."
                         )
 
                     dataset.save_episode()
-                    logging.info(
+                    logger.info(
                         f"Episode {self.episode_count} saved to dataset.",
                     )
 
@@ -246,34 +242,34 @@ class RecordingManager(ABC):
                                 stderr=subprocess.DEVNULL,
                             )
                         except Exception as e:
-                            logging.error(
+                            logger.error(
                                 f"Failed to play sound for episode deletion: {e}",
                             )
 
                     dataset.clear_episode_buffer()
 
                 elif mtype == "PUSH_TO_HUB":
-                    logging.info(
+                    logger.info(
                         "Pushing dataset to Hugging Face Hub...",
                     )
                     try:
                         dataset.push_to_hub(repo_id=self.repo_id, private=True)
-                        logging.info("Dataset pushed to Hugging Face Hub successfully.")
+                        logger.info("Dataset pushed to Hugging Face Hub successfully.")
                     except Exception as e:
-                        logging.error(
+                        logger.error(
                             f"Failed to push dataset to Hugging Face Hub: {e}",
                             exc_info=True,
                         )
                 elif mtype == "SHUTDOWN":
-                    logging.info("Shutting down writer process.")
+                    logger.info("Shutting down writer process.")
                     break
             except Exception as e:
-                logging.debug("Error occured: ", e)
+                logger.debug("Error occured: ", e)
             finally:
                 pass
 
         self.queue.task_done()
-        logging.info("Writter process finished.")
+        logger.info("Writter process finished.")
 
     def record_episode(
         self,
@@ -293,14 +289,14 @@ class RecordingManager(ABC):
         try:
             self._wait_for_start_signal()
         except StopIteration:
-            logging.info("Recording manager is shutting down.")
+            logger.info("Recording manager is shutting down.")
             return
 
         if on_start:
-            logging.info("Resetting Environment.")
+            logger.info("Resetting Environment.")
             on_start()
 
-        logging.info("Started recording episode.")
+        logger.info("Started recording episode.")
 
         while self.state == "recording":
             frame_start = time.time()
@@ -308,7 +304,7 @@ class RecordingManager(ABC):
             obs, action = data_fn()
 
             if obs is None or action is None:
-                logging.debug("Data function returned None, skipping frame.")
+                logger.debug("Data function returned None, skipping frame.")
                 # If the data function returns None, skip this frame
                 sleep_time = 1 / self.fps - (time.time() - frame_start)
                 time.sleep(sleep_time)
@@ -320,13 +316,13 @@ class RecordingManager(ABC):
             if sleep_time > 0:
                 time.sleep(sleep_time)
             else:
-                logging.warning(
+                logger.warning(
                     f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS. "
                     "Consider decreasing the FPS or optimizing the data function."
                 )
-            logging.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
+            logger.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
 
-        logging.debug("Finished recording...")
+        logger.debug("Finished recording...")
 
         if on_end:
             on_end()
@@ -335,7 +331,7 @@ class RecordingManager(ABC):
 
     def _wait_for_start_signal(self) -> None:
         """Wait until the recording state is set to 'recording'."""
-        logging.info("Waiting to start recording...")
+        logger.info("Waiting to start recording...")
         while self.state != "recording":
             if self.state == "exit":
                 raise StopIteration
@@ -344,23 +340,23 @@ class RecordingManager(ABC):
     def _handle_post_episode(self) -> None:
         """Handle the state after recording an episode."""
         if self.state == "paused":
-            logging.info("Paused. Awaiting user decision to save/delete...")
+            logger.info("Paused. Awaiting user decision to save/delete...")
             while self.state == "paused":
                 time.sleep(0.5)
 
         if self.state == "to_be_saved":
-            logging.info("Saving current episode.")
+            logger.info("Saving current episode.")
             self.queue.put({"type": "SAVE_EPISODE"})
             self.episode_count += 1
             self._set_to_wait()
         elif self.state == "to_be_deleted":
-            logging.info("Deleting current episode.")
+            logger.info("Deleting current episode.")
             self.queue.put({"type": "DELETE_EPISODE"})
             self._set_to_wait()
         elif self.state == "exit":
             pass
         else:
-            logging.warning(f"Unexpected state after recording: {self.state}")
+            logger.warning(f"Unexpected state after recording: {self.state}")
 
     def __enter__(self) -> "RecordingManager":  # noqa: D105
         """Enter the recording manager context."""
@@ -370,16 +366,16 @@ class RecordingManager(ABC):
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # noqa: ANN001, D105
         """Exit the recording manager."""
         if exc_type is not None:
-            logging.error(
+            logger.error(
                 "An error occurred during recording. Shutting down the recording manager.",
                 exc_info=(exc_type, exc_value, traceback),
             )
 
         if not self.push_to_hub:
-            logging.info("Not pushing dataset to Hugging Face Hub.")
+            logger.info("Not pushing dataset to Hugging Face Hub.")
         else:
             self.queue.put({"type": "PUSH_TO_HUB"})
-        logging.info("Shutting down the record process...")
+        logger.info("Shutting down the record process...")
         self.queue.put({"type": "SHUTDOWN"})
 
         self.writer.join()
@@ -409,7 +405,7 @@ class ROSRecordingManager(RecordingManager):
         self._subscriber = self.node.create_subscription(
             String, "record_transition", self._callback_recording_trigger, 10
         )
-        logging.debug("ROS2 node created and subscriber initialized.")
+        logger.debug("ROS2 node created and subscriber initialized.")
 
         threading.Thread(target=self._spin_node, daemon=True).start()
 
@@ -442,29 +438,29 @@ class ROSRecordingManager(RecordingManager):
             print("[yellow]Allowed actions are: record, save, delete, exit[/yellow]")
             return
 
-        logging.debug(f"Received message: {msg.data}")
-        logging.debug(f"Current state: {self.state}")
+        logger.debug(f"Received message: {msg.data}")
+        logger.debug(f"Current state: {self.state}")
 
         if self.state == "is_waiting":
             if msg.data == "record":
-                logging.debug("Transitioning to recording state.")
+                logger.debug("Transitioning to recording state.")
                 self.state = "recording"
             if msg.data == "exit":
-                logging.debug("Transitioning to exit state.")
+                logger.debug("Transitioning to exit state.")
                 self.state = "exit"
         elif self.state == "recording":
             if msg.data == "record":
-                logging.debug("Transitioning to paused state.")
+                logger.debug("Transitioning to paused state.")
                 self.state = "paused"
         elif self.state == "paused":
             if msg.data == "exit":
-                logging.debug("Transitioning to exit state.")
+                logger.debug("Transitioning to exit state.")
                 self.state = "exit"
             if msg.data == "save":
-                logging.debug("Transitioning to to_be_saved state.")
+                logger.debug("Transitioning to to_be_saved state.")
                 self.state = "to_be_saved"
             if msg.data == "delete":
-                logging.debug("Transitioning to to_be_deleted state.")
+                logger.debug("Transitioning to to_be_deleted state.")
                 self.state = "to_be_deleted"
 
 
