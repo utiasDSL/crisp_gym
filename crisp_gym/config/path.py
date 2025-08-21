@@ -46,7 +46,7 @@ if CRISP_CONFIG_PATH_STR is not None:
     CRISP_CONFIG_PATH = CRISP_CONFIG_PATHS[0]
 
 
-def find_config(filename: str) -> Optional[Path]:
+def find_config(filename: str) -> Path | None:
     """Find a config file in the CRISP config paths.
 
     Args:

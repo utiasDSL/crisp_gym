@@ -7,8 +7,12 @@ utilities for converting observations between different formats.
 
 from typing import Any, Dict
 
+import gymnasium
 import numpy as np
 import rich
+
+from crisp_gym.manipulator_env import ManipulatorBaseEnv, make_env
+from crisp_gym.util.control_type import ControlType
 
 try:
     from lerobot.datasets.lerobot_dataset import CODEBASE_VERSION
@@ -20,114 +24,101 @@ except ImportError:
 
 import logging
 
-from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
-
 logger = logging.getLogger(__name__)
 
 
 def get_features(
-    env_config: ManipulatorEnvConfig,
-    ctrl_type: str = "cartesian",
+    env: ManipulatorBaseEnv,
     use_video: bool = True,
 ) -> Dict[str, Dict]:
     """Get the features used by LeRobotDataset.
 
     Args:
-        env_config (ManipulatorEnvConfig): The environment configuration for the manipulator.
+        env (ManipulatorBaseEnv): The environment configuration object.
         ctrl_type (str): The type of control used, either "joint" or "cartesian". Defaults to "cartesian".
         use_video (bool): Whether to include video features. Defaults to True.
     """
     if not CODEBASE_VERSION.startswith("v2"):
-        logger.warn(
+        logger.warning(
             "Feature generation for LeRobot has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
         )
 
-    ctrl_dims = {
-        "joint": [f"joint_{idx}" for idx in range(env_config.robot_config.num_joints())]
+    ctrl_dims: dict[ControlType, list[str]] = {
+        ControlType.JOINT: [f"joint_{idx}" for idx in range(env.config.robot_config.num_joints())]
         + ["gripper"],
-        "cartesian": ["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
+        ControlType.CARTESIAN: ["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
     }
 
-    if ctrl_type not in ctrl_dims:
+    if env.ctrl_type not in ctrl_dims:
         raise ValueError(
-            f"Control type {ctrl_type} not supported. Supported types: {list(ctrl_dims.keys())}"
+            f"Control type {env.ctrl_type} not supported. Supported types: {list(ctrl_dims.keys())}"
         )
 
     # Feature configuration
+    if not isinstance(env.observation_space, gymnasium.spaces.Dict):
+        raise ValueError(
+            "The observation space must be a gymnasium Dict space. "
+            "This function is designed for environments with structured observations."
+        )
+
     features = {}
 
-    # Camera features
-    camera_features = {
-        f"observation.images.{cam.camera_name}": {
-            "dtype": "image",
-            "shape": (*cam.resolution, 3),
-            "names": ["height", "width", "channels"],
-        }
-        for cam in env_config.camera_configs
-        if cam.resolution is not None
-    }
-    features.update(camera_features)
+    for feature_key in env.observation_space.keys():
+        if feature_key.startswith("observation.state"):
+            # Proprioceptive state features
+            names = []
+            if "joint" in feature_key:
+                names = ctrl_dims[ControlType.JOINT][:-1]  # Exclude gripper from joint state
+            elif "cartesian" in feature_key:
+                names = ctrl_dims[ControlType.CARTESIAN][
+                    :-1
+                ]  # Exclude gripper from cartesian state
+            elif "gripper" in feature_key:
+                names = ["gripper"]
+            elif "target" in feature_key:
+                names = ["target_" + dim for dim in ctrl_dims[env.ctrl_type][:-1]]
+            else:
+                feature_shape = env.observation_space[feature_key].shape
+                n: int = feature_shape[0] if feature_shape is not None else 1
+                feature_key_name = feature_key.split(".")[-1]
+                names = [f"{feature_key_name}_{i}" for i in range(n)]
 
-    if use_video:
-        video_features = {
-            f"observation.images.{cam.camera_name}": {
-                "dtype": "video",
-                "shape": (*cam.resolution, 3),
-                "names": ["height", "width", "channels"],
-                "video_info": {
-                    "video.fps": env_config.control_frequency,
-                    "video.codec": "av1",
-                    "video.pix_fmt": "yuv420p",
-                    "video.is_depth_map": False,
-                    "has_audio": False,
-                },
+            features[feature_key] = {
+                "dtype": "float32",
+                "shape": env.observation_space[feature_key].shape,
+                "names": names,
             }
-            for cam in env_config.camera_configs
-            if cam.resolution is not None
-        }
-        features.update(video_features)
 
-    # Propioceptive
-    features["observation.state.joint"] = {
-        "dtype": "float32",
-        "shape": (len(ctrl_dims["joint"]) - 1,),  # Exclude gripper
-        "names": ctrl_dims["joint"][:-1],  # Exclude gripper
-    }
-    features["observation.state"] = {
-        "dtype": "float32",
-        "shape": (len(ctrl_dims["cartesian"]) - 1,),  # Exclude gripper
-        "names": ctrl_dims["cartesian"][:-1],  # Exclude gripper
-    }
-    features["observation.state.target"] = (
-        {
-            "dtype": "float32",
-            "shape": (len(ctrl_dims["cartesian"]) - 1,),  # Exclude gripper
-            "names": ctrl_dims["cartesian"][:-1],  # Exclude gripper
-        }
-        if ctrl_type == "cartesian"
-        else {
-            "dtype": "float32",
-            "shape": (len(ctrl_dims["joint"]) - 1,),  # Exclude gripper
-            "names": ctrl_dims["joint"][:-1],  # Exclude gripper
-        }
-    )
+        elif feature_key.startswith("task"):
+            continue  # Task features are handled separately
 
-    # Sensors
-    sensor_features = {
-        f"observation.state.sensor_{sensor.name}": {
-            "dtype": "float32",
-            "shape": sensor.shape,
-            "names": [f"{sensor.name}_{i}" for i in range(sensor.shape[0])],
-        }
-        for sensor in env_config.sensor_configs
-    }
-    features.update(sensor_features)
+        elif feature_key.startswith("observation.images."):
+            features[feature_key] = {
+                "dtype": "image",
+                "shape": env.observation_space[feature_key].shape,
+                "names": ["height", "width", "channels"],
+            }
+            if use_video:
+                original_feature_key = feature_key
+                feature_key = feature_key.replace("images", "video")
+                features[feature_key] = {
+                    "dtype": "video",
+                    "shape": env.observation_space[original_feature_key].shape,
+                    "names": ["height", "width", "channels"],
+                    "video_info": {
+                        "video.fps": env.config.control_frequency,
+                        "video.codec": "av1",
+                        "video.pix_fmt": "yuv420p",
+                        "video.is_depth_map": False,
+                        "has_audio": False,
+                    },
+                }
 
     # Action
     features["action"] = {
         "dtype": "float32",
-        "shape": (len(ctrl_dims[ctrl_type]),),
-        "names": ctrl_dims[ctrl_type],
+        "shape": (len(ctrl_dims[env.ctrl_type]),),
+        "names": ctrl_dims[env.ctrl_type],
     }
 
     return features
@@ -257,7 +248,7 @@ def numpy_obs_to_torch(obs: Dict[str, Any]) -> Dict[str, Any]:
 
 if __name__ == "__main__":
     # Example usage
-    env_config = make_env_config("right_aloha_franka")
-    features = get_features(env_config, ctrl_type="cartesian", use_video=True)
+    env = make_env("right_aloha_franka")
+    features = get_features(env, ctrl_type="cartesian", use_video=True)
 
     rich.print(features)

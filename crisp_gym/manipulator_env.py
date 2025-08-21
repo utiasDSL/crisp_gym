@@ -94,32 +94,6 @@ class ManipulatorBaseEnv(gym.Env):
         self.ctrl_type = ControlType.UNDEFINED
 
         logger.debug(f"ManipulatorBaseEnv initialized with config: {self.config}")
-        logger.debug("Waiting for robot, gripper, cameras, and sensors to be ready...")
-        self.robot.wait_until_ready(timeout=3)
-        if self.config.gripper_enabled:
-            self.gripper.wait_until_ready(timeout=3)
-        for camera in self.cameras:
-            camera.wait_until_ready(timeout=3)
-        for sensor in self.sensors:
-            sensor.wait_until_ready(timeout=3)
-        logger.debug("*Robot, gripper, cameras, and sensors are ready.*")
-
-        if self.config.cartesian_control_param_config:
-            if not os.path.exists(self.config.cartesian_control_param_config):
-                raise FileNotFoundError(
-                    f"Cartesian control parameter config file not found: {self.config.cartesian_control_param_config}"
-                )
-            self.robot.cartesian_controller_parameters_client.load_param_config(
-                file_path=self.config.cartesian_control_param_config
-            )
-        if self.config.joint_control_param_config:
-            if not os.path.exists(self.config.joint_control_param_config):
-                raise FileNotFoundError(
-                    f"Joint control parameter config file not found: {self.config.joint_control_param_config}"
-                )
-            self.robot.joint_controller_parameters_client.load_param_config(
-                file_path=self.config.joint_control_param_config
-            )
 
         self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
 
@@ -139,8 +113,8 @@ class ManipulatorBaseEnv(gym.Env):
                     for camera in self.cameras
                     if camera.config.resolution is not None
                 },
-                # Combined state: cartesian pose (6D) + gripper (1D)
-                "observation.state": gym.spaces.Box(
+                # Combined state: cartesian pose (6D)
+                "observation.state.cartesian": gym.spaces.Box(
                     low=np.concatenate(
                         [
                             -np.ones((6,), dtype=np.float32),  # cartesian pose
@@ -181,6 +155,56 @@ class ManipulatorBaseEnv(gym.Env):
                 },
             }
         )
+        self._uninitialized = True
+
+    def initialize(self, force: bool = False):
+        """Initialize the environment.
+
+        Args:
+            force (bool): If True, force re-initialization even if already initialized.
+
+        Raises:
+            FileNotFoundError: If the cartesian or joint control parameter config file does not exist.
+        """
+        if not self._uninitialized and not force:
+            logger.debug("Environment is already initialized.")
+            return
+
+        self.wait_until_ready()
+
+        if self.config.cartesian_control_param_config:
+            if not os.path.exists(self.config.cartesian_control_param_config):
+                raise FileNotFoundError(
+                    f"Cartesian control parameter config file not found: {self.config.cartesian_control_param_config}"
+                )
+            self.robot.cartesian_controller_parameters_client.load_param_config(
+                file_path=self.config.cartesian_control_param_config
+            )
+        if self.config.joint_control_param_config:
+            if not os.path.exists(self.config.joint_control_param_config):
+                raise FileNotFoundError(
+                    f"Joint control parameter config file not found: {self.config.joint_control_param_config}"
+                )
+            self.robot.joint_controller_parameters_client.load_param_config(
+                file_path=self.config.joint_control_param_config
+            )
+
+    def wait_until_ready(self):
+        """Wait until the robot, gripper, cameras, and sensors are ready."""
+        logger.debug("Waiting for robot, gripper, cameras, and sensors to be ready...")
+
+        self.robot.wait_until_ready(timeout=3)
+
+        if self.config.gripper_enabled:
+            self.gripper.wait_until_ready(timeout=3)
+
+        for camera in self.cameras:
+            camera.wait_until_ready(timeout=3)
+
+        for sensor in self.sensors:
+            sensor.wait_until_ready(timeout=3)
+
+        logger.debug("*Robot, gripper, cameras, and sensors are ready.*")
 
     def get_obs(self) -> dict:
         """Retrieve the current observation from the robot in LeRobot format and allow backward compatibility."""
@@ -215,7 +239,7 @@ class ManipulatorBaseEnv(gym.Env):
         )
 
         # Cartesian pose
-        obs["observation.state"] = cartesian_pose.astype(np.float32)
+        obs["observation.state.cartesian"] = cartesian_pose.astype(np.float32)
 
         # Gripper state
         obs["observation.state.gripper"] = gripper_value.astype(np.float32)
@@ -285,6 +309,8 @@ class ManipulatorBaseEnv(gym.Env):
         super().reset(seed=seed, options=options)
 
         self.timestep = 0
+
+        self.initialize()
 
         self.robot.reset_targets()
         self.robot.wait_until_ready()
@@ -414,8 +440,6 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             dtype=np.float32,
         )
 
-        self.switch_to_default_controller()
-
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
@@ -515,8 +539,6 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             ),
             dtype=np.float32,
         )
-
-        self.switch_to_default_controller()
 
     @override
     def _get_obs(self) -> dict:
