@@ -27,7 +27,6 @@ import logging
 import os
 from pathlib import Path
 from typing import Any, List, Tuple
-from typing_extensions import override
 
 import gymnasium as gym
 import numpy as np
@@ -38,6 +37,7 @@ from crisp_py.robot import Pose, Robot
 from crisp_py.sensors.sensor import make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
+from typing_extensions import override
 
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
@@ -131,7 +131,7 @@ class ManipulatorBaseEnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 **{
-                    f"{camera.config.camera_name}_image": gym.spaces.Box(
+                    f"observation.images.{camera.config.camera_name}": gym.spaces.Box(
                         low=np.zeros((*camera.config.resolution, 3), dtype=np.uint8),
                         high=255 * np.ones((*camera.config.resolution, 3), dtype=np.uint8),
                         dtype=np.uint8,
@@ -139,53 +139,98 @@ class ManipulatorBaseEnv(gym.Env):
                     for camera in self.cameras
                     if camera.config.resolution is not None
                 },
-                "joint": gym.spaces.Box(
+                # Combined state: cartesian pose (6D) + gripper (1D)
+                "observation.state": gym.spaces.Box(
+                    low=np.concatenate(
+                        [
+                            -np.ones((6,), dtype=np.float32),  # cartesian pose
+                        ]
+                    ),
+                    high=np.concatenate(
+                        [
+                            np.ones((6,), dtype=np.float32),  # cartesian pose
+                        ]
+                    ),
+                    dtype=np.float32,
+                ),
+                # Gripper state
+                "observation.state.gripper": gym.spaces.Box(
+                    low=np.array([0.0], dtype=np.float32),  # Gripper closed
+                    high=np.array([1.0], dtype=np.float32),  # Gripper open
+                    dtype=np.float32,
+                ),
+                # Joint state
+                "observation.state.joint": gym.spaces.Box(
                     low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
                     * -np.pi,
                     high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
                     * np.pi,
                     dtype=np.float32,
                 ),
-                "cartesian": gym.spaces.Box(
-                    low=-np.ones((6,), dtype=np.float32),
-                    high=np.ones((6,), dtype=np.float32),
-                    dtype=np.float32,
-                ),
-                "gripper": gym.spaces.Box(
-                    low=np.zeros((1,), dtype=np.float32),
-                    high=np.ones((1,), dtype=np.float32),
-                    dtype=np.float32,
-                ),
+                # Task description
+                "task": gym.spaces.Text(max_length=256),
+                # Sensor data
+                **{
+                    f"observation.state.sensor_{sensor.config.name}": gym.spaces.Box(
+                        low=-np.inf * np.ones(sensor.config.shape, dtype=np.float32),
+                        high=np.inf * np.ones(sensor.config.shape, dtype=np.float32),
+                        dtype=np.float32,
+                    )
+                    for sensor in self.sensors
+                    if hasattr(sensor, "config") and hasattr(sensor.config, "shape")
+                },
             }
         )
 
+    def get_obs(self) -> dict:
+        """Retrieve the current observation from the robot in LeRobot format and allow backward compatibility."""
+        return self._get_obs()
+
     def _get_obs(self) -> dict:
-        """Retrieve the current observation from the robot.
+        """Retrieve the current observation from the robot in LeRobot format.
 
         Returns:
-            dict: A dictionary containing the current sensor and state information, including:
-                - '{camera_name}_image': RGB image from each configured camera.
-                - 'joint': Current joint configuration of the robot in radians.
-                - 'cartesian': End-effector pose as a 6D vector (position [xyz] + orientation in Euler angles [xyz], in radians).
-                - 'gripper': Normalized gripper state (0 = fully open, 1 = fully closed).
+            dict: A dictionary containing the current sensor and state information in LeRobot format:
+                - 'observation.images.{camera_name}': RGB image from each configured camera.
+                - 'observation.state': Combined state vector (cartesian pose + gripper).
+                - 'observation.state.joint': Current joint configuration of the robot in radians.
+                - 'observation.state.sensor_{sensor_name}': Sensor values.
+                - 'task': Task description (empty string for now).
         """
         obs = {}
-        obs["joint"] = self.robot.joint_values
+
+        # TODO: Task description
+        obs["task"] = ""
+
         # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
-        obs["cartesian"] = np.concatenate(
+        cartesian_pose = np.concatenate(
             (
                 self.robot.end_effector_pose.position,
                 self.robot.end_effector_pose.orientation.as_euler("xyz"),
             ),
             axis=0,
         )
-        obs["gripper"] = (
+        gripper_value = (
             1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
         )
+
+        # Cartesian pose
+        obs["observation.state"] = cartesian_pose.astype(np.float32)
+
+        # Gripper state
+        obs["observation.state.gripper"] = gripper_value.astype(np.float32)
+
+        # Joint state
+        obs["observation.state.joint"] = self.robot.joint_values
+
+        # Camera images
         for camera in self.cameras:
-            obs[f"{camera.config.camera_name}_image"] = camera.current_image
+            obs[f"observation.images.{camera.config.camera_name}"] = camera.current_image
+
+        # Sensor data
         for sensor in self.sensors:
-            obs[f"sensor_{sensor.config.name}"] = sensor.value
+            obs[f"observation.state.sensor_{sensor.config.name}"] = sensor.value
+
         return obs
 
     def _set_gripper_action(self, action: float):
@@ -342,7 +387,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
                 **self.observation_space.spaces,
-                "target": gym.spaces.Box(
+                "observation.state.target": gym.spaces.Box(
                     low=np.ones((6,), dtype=np.float32) * -np.pi,
                     high=np.ones((6,), dtype=np.float32) * np.pi,
                     dtype=np.float32,
@@ -375,7 +420,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
         # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
-        obs["target"] = np.concatenate(
+        obs["observation.state.target"] = np.concatenate(
             (
                 self.robot.target_pose.position,
                 self.robot.target_pose.orientation.as_euler("xyz"),
@@ -445,7 +490,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
                 **self.observation_space.spaces,
-                "target": gym.spaces.Box(
+                "observation.state.target": gym.spaces.Box(
                     low=np.ones((self.num_joints,), dtype=np.float32) * -np.pi,
                     high=np.ones((self.num_joints,), dtype=np.float32) * np.pi,
                     dtype=np.float32,
@@ -476,7 +521,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
-        obs["target"] = self.robot.target_joint
+        obs["observation.state.target"] = self.robot.target_joint
         return obs
 
     @override
