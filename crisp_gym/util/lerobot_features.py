@@ -62,10 +62,16 @@ def get_features(
         )
 
     features = {}
+    state_feature_length = 0
+    state_feature_names = []
 
     for feature_key in env.observation_space.keys():
         if feature_key.startswith("observation.state"):
             # Proprioceptive state features
+            feature_shape = env.observation_space[feature_key].shape
+            if feature_shape is None:
+                raise ValueError(f"Feature shape for {feature_key} should not be None!")
+
             names = []
             if "joint" in feature_key:
                 names = ctrl_dims[ControlType.JOINT][:-1]  # Exclude gripper from joint state
@@ -78,16 +84,17 @@ def get_features(
             elif "target" in feature_key:
                 names = ["target_" + dim for dim in ctrl_dims[env.ctrl_type][:-1]]
             else:
-                feature_shape = env.observation_space[feature_key].shape
                 n: int = feature_shape[0] if feature_shape is not None else 1
                 feature_key_name = feature_key.split(".")[-1]
                 names = [f"{feature_key_name}_{i}" for i in range(n)]
 
             features[feature_key] = {
                 "dtype": "float32",
-                "shape": env.observation_space[feature_key].shape,
+                "shape": feature_shape,
                 "names": names,
             }
+            state_feature_length += np.prod(feature_shape)
+            state_feature_names += names
 
         elif feature_key.startswith("task"):
             continue  # Task features are handled separately
@@ -113,6 +120,24 @@ def get_features(
                         "has_audio": False,
                     },
                 }
+
+    image_resolutions = [
+        feature["shape"]
+        for key, feature in features.items()
+        if key.startswith("observation.images.")
+    ]
+    if len(set(image_resolutions)) > 1:
+        logger.warning(
+            "Images have different resolutions. This might cause issues with the current policies available in LeRobot. "
+            "For now, they only support images with the same resolution. "
+            "Please ensure all images have the same resolution."
+        )
+    # Combined state feature
+    features["observation.state"] = {
+        "dtype": "float32",
+        "shape": (state_feature_length,),
+        "names": state_feature_names,
+    }
 
     # Action
     features["action"] = {
