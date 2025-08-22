@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.3](https://github.com/utiasDSL/crisp_gym/compare/v2.0.2...v2.0.3) (2025-08-22)
+
+
+### Bug Fixes
+
+* hotfix variable name from ctrl_type to control_type ([547ae30](https://github.com/utiasDSL/crisp_gym/commit/547ae306a962da4635bfe4cfbcbde748c1b963b2))
+
 ## [2.0.2](https://github.com/utiasDSL/crisp_gym/compare/v2.0.1...v2.0.2) (2025-08-20)
 
 
