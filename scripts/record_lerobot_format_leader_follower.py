@@ -157,7 +157,7 @@ try:
 
     env = make_env(
         env_type=args.follower_config,
-        ctrl_type=ctrl_type,
+        control_type=ctrl_type,
         namespace=args.follower_namespace,
     )
 
