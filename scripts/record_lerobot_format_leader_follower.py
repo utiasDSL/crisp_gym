@@ -1,4 +1,9 @@
 """Script showcasing how to record data in Lerobot Format."""
+# import debugpy
+# debugpy.listen(("0.0.0.0", 5678))
+# print("Waiting for debugger attach…")
+# debugpy.wait_for_client()   
+# print("Hello, Debugging!")
 
 import argparse
 import logging

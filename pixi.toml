@@ -19,6 +19,7 @@ make = "*"
 ninja = "*"
 typing_inspect = ">=0.9.0,<0.10"
 libstdcxx-ng = ">=12.2.0"
+debugpy = ">=1.8.14,<2"
 
 [target.linux.dependencies]
 libgl-devel = "*"
@@ -68,7 +69,7 @@ ros-jazzy-rmw-cyclonedds-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-# crisp_python = { path = "../crisp_py", editable = false }
+crisp_python = { path = "../crisp_py", editable = true }
 
 [tasks]
 configure = "bash scripts/configure.sh"
