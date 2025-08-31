@@ -20,6 +20,7 @@ ninja = "*"
 typing_inspect = ">=0.9.0,<0.10"
 libstdcxx-ng = ">=12.2.0"
 debugpy = ">=1.8.14,<2"
+ffmpeg = ">=4,<8"
 
 [target.linux.dependencies]
 libgl-devel = "*"
