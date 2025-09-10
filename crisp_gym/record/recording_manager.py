@@ -277,6 +277,7 @@ class RecordingManager(ABC):
         task: str,
         on_start: Callable[[], None] | None = None,
         on_end: Callable[[], None] | None = None,
+        env: None = None,
     ) -> None:
         """Record a single episode from user-provided data function.
 
