@@ -8,11 +8,17 @@ from multiprocessing import Pipe, Process
 import crisp_gym  # noqa: F401
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
-from crisp_gym.record.record_functions import inference_worker, make_policy_fn
+from crisp_gym.record.record_functions import inference_worker, make_policy_fn, inference_worker_async
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
+
+# import debugpy
+# debugpy.listen(("0.0.0.0", 5678))
+# print("Waiting for debugger attach…")
+# debugpy.wait_for_client()   
+# print("Hello, Debugging!")
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -86,6 +92,13 @@ parser.add_argument(
     type=str,
     default=None,
     help="Namespace for the follower robot. This is used to identify the robot in the ROS ecosystem.",
+)
+
+parser.add_argument(
+   "--async-inference",
+    action="store_true",
+    default=False,
+    help="Use asynchronous chunked policy inference (double-buffered).",
 )
 
 
@@ -162,8 +175,9 @@ parent_conn, child_conn = Pipe()
 
 
 # Start inference process
+worker_target = inference_worker_async if args.async_inference else inference_worker
 inf_proc = Process(
-    target=inference_worker,
+    target=worker_target,
     kwargs={
         "conn": child_conn,
         "pretrained_path": args.path,
@@ -199,12 +213,21 @@ with recording_manager:
             f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
         )
 
-        recording_manager.record_episode(
-            data_fn=make_policy_fn(env, parent_conn),
-            task="Pick up the lego block.",
-            on_start=on_start,
-            on_end=on_end,
-        )
+        if args.async_inference:
+            recording_manager.record_episode_async(
+                on_start=on_start,
+                on_end=on_end,
+                env=env,
+                conn=parent_conn,
+                task="Pick up the lego block.",
+            )
+        else:
+            recording_manager.record_episode(
+                data_fn=make_policy_fn(env, parent_conn),
+                task="Pick up the lego block.",
+                on_start=on_start,
+                on_end=on_end,
+            )
 
         logging.info("Episode finished. Waiting for the next episode to start.")
 

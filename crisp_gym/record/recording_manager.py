@@ -15,6 +15,8 @@ import rclpy
 # TODO: make this optional, we do not want to depend on lerobot
 from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.policies.normalize import Normalize
+from collections import deque
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
@@ -330,6 +332,95 @@ class RecordingManager(ABC):
 
         self._handle_post_episode()
 
+    def record_episode_async(self, on_start, on_end, env, conn, task: str = "task"):
+        try:
+            self._wait_for_start_signal()
+        except StopIteration:
+            logger.info("Recording manager is shutting down.")
+            return
+
+        if on_start:
+            logger.info("Resetting Environment.")
+            on_start()
+
+        logger.info("Started recording episode.")
+
+
+        meta = conn.recv()
+        if not (isinstance(meta, dict) and "type" in meta and meta["type"] == "META"):
+            logger.error("Async worker did not send META. Falling back to paused state.")
+            self.state = "paused"
+            self._handle_post_episode()
+            return
+        n_obs = int(meta["n_obs_steps"])
+        n_act = int(meta["n_action_steps"])
+        logger.info(f"[Async] Using n_obs_steps={n_obs}, n_action_steps={n_act}")
+
+        # rolling buffer of last n_obs observations to request the next chunk
+        obs_buf: deque = deque(maxlen=n_obs)
+
+        # prime: gather n_obs observations without stepping (env._get_obs() reads current sensors/images)
+        for _ in range(n_obs):
+            obs_buf.append(env._get_obs())
+            time.sleep(1 / self.fps)
+
+        # request first chunk
+        conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+        current_chunk = conn.recv()  # torch.Tensor on GPU or CPU
+        current_chunk = current_chunk.to("cpu").numpy()  # shape: (T, action_dim) after squeeze inside worker
+
+        # prefetch threshold: request next chunk when we are close to finishing current one
+        prefetch_at = max(1, n_act - n_obs)  # leave n_obs steps to collect obs for the next request
+        i = 0
+        have_next = False
+        next_chunk = None
+
+        while self.state == "recording":
+            frame_start = time.time()
+
+            # Step with the current action
+            action = current_chunk[i]
+            try:
+                obs, *_ = env.step(action, block=False)
+            except Exception as e:
+                logger.error(f"Error during environment step: {e}")
+                break
+
+            # push frame to writer
+            self.queue.put({"type": "FRAME", "data": (obs, action, task)})
+
+            # issue prefetch just once per chunk
+            if (not have_next) and (i >= prefetch_at - 1):
+                conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                have_next = True
+
+            i += 1
+            if i >= n_act:
+                # swap in the prefetched chunk (blocking receive if needed)
+                if not have_next:
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                next_chunk = conn.recv()
+                next_chunk = next_chunk.to("cpu").numpy()
+                current_chunk, next_chunk = next_chunk, None
+                have_next = False
+                i = 0
+
+            # pacing
+            sleep_time = 1 / self.fps - (time.time() - frame_start)
+            if sleep_time > 0:
+                time.sleep(sleep_time) 
+
+            # maintain obs buffer for next request
+            obs_buf.append(env._get_obs())
+
+
+        logger.debug("Finished recording...")
+
+        if on_end:
+            on_end()
+
+        self._handle_post_episode()
+        
     def _wait_for_start_signal(self) -> None:
         """Wait until the recording state is set to 'recording'."""
         logger.info("Waiting to start recording...")
