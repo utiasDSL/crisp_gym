@@ -220,9 +220,8 @@ def inference_worker_async(
     n_obs = int(cfg.n_obs_steps)
     n_act = int(cfg.n_action_steps)
 
-    # Tell parent the sizes we will use
+    # Tell parent how many observation steps we require and how many steps we can make without replaning 
     conn.send({"type": "META", "n_obs_steps": n_obs, "n_action_steps": n_act})
-    logging.info(f"[Inference-Async] META sent (n_obs={n_obs}, n_act={n_act}).")
 
     while True:
         msg = conn.recv()
@@ -235,49 +234,49 @@ def inference_worker_async(
         if not (isinstance(msg, dict) and msg.get("type") == "OBS_SEQ"):
             logging.warning(f"[Inference-Async] Unknown message: {type(msg)}")
             continue
-
+        
+        # We are recieving a list of dictonaries with the last observations 
         obs_seq = msg["obs_seq"]
         if len(obs_seq) < n_obs:
             logging.warning("[Inference-Async] Received fewer observations than n_obs_steps.")
         # Use only last n_obs
         obs_seq = obs_seq[-n_obs:]
 
-        # Build the latest single-step batch from the last observation,
-        # then let `select_action`/queues handle history, and finally
-        # call `predict_action_chunk` to get a chunk.
-        last = obs_seq[-1]
+        # Make the policy predict an action chunk for the current obeservation.
+        # Therefore we follow the implementation on the Lerobot side for select_action 
+        # and predict_action_chunk 
         with torch.inference_mode():
-            state = np.concatenate([last["cartesian"][:6], last["gripper"]])
-            batch = {
-                "observation.state": torch.from_numpy(state)
-                    .unsqueeze(0)
-                    .to(device=device, dtype=torch.float32),
-                "task": "",
-            }
-            for cam in env.cameras:
-                img = last[f"{cam.config.camera_name}_image"]
-                batch[f"observation.images.{cam.config.camera_name}"] = (
-                    torch.from_numpy(img)
-                    .permute(2, 0, 1)
-                    .unsqueeze(0)
-                    .to(device=device, dtype=torch.float32)
-                    / 255
-                )
-
-            # This mirrors `select_action` pre-processing so queues are filled correctly
-            batch_norm = policy.normalize_inputs(batch)
-            if policy.config.image_features:
-                # shallow copy then add OBS_IMAGES stack
-                batch_norm = dict(batch_norm)
-                from lerobot.constants import OBS_IMAGES
-                batch_norm[OBS_IMAGES] = torch.stack(
-                    [batch_norm[k] for k in policy.config.image_features], dim=-4
-                )
-            policy._queues = populate_queues(policy._queues, batch_norm)
+            for i in range(n_obs):
+                last= obs_seq[i]
+                state = np.concatenate([last["cartesian"][:6], last["gripper"]])
+                batch = {
+                    "observation.state": torch.from_numpy(state)
+                        .unsqueeze(0)
+                        .to(device=device, dtype=torch.float32),
+                    "task": "", # TODO: Add task description if needed
+                }
+                for cam in env.cameras:
+                    img = last[f"{cam.config.camera_name}_image"]
+                    batch[f"observation.images.{cam.config.camera_name}"] = (
+                        torch.from_numpy(img)
+                        .permute(2, 0, 1)
+                        .unsqueeze(0)
+                        .to(device=device, dtype=torch.float32)
+                        / 255
+                    )
+                # This mirrors `select_action` pre-processing so queues are filled correctly
+                batch_norm = policy.normalize_inputs(batch)
+                if policy.config.image_features:
+                    # shallow copy then add OBS_IMAGES stack
+                    batch_norm = dict(batch_norm)
+                    from lerobot.constants import OBS_IMAGES
+                    batch_norm[OBS_IMAGES] = torch.stack(
+                        [batch_norm[k] for k in policy.config.image_features], dim=-4
+                    )
+                policy._queues = populate_queues(policy._queues, batch_norm)
 
             # Now produce a fresh chunk
-            chunk = policy.predict_action_chunk(batch_norm)  # (B=1, T=n_act, dim)
-            # Return as (T, dim) for parent-side stepping
+            chunk = policy.predict_action_chunk(batch_norm)  
             chunk = chunk.squeeze(0).to(device="cpu")
 
         logging.debug(f"[Inference-Async] Computed chunk with shape {tuple(chunk.shape)}")

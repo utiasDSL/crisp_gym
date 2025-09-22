@@ -370,7 +370,7 @@ class RecordingManager(ABC):
         current_chunk = current_chunk.to("cpu").numpy()  # shape: (T, action_dim) after squeeze inside worker
 
         # prefetch threshold: request next chunk when we are close to finishing current one
-        prefetch_at = max(1, n_act - n_obs)  # leave n_obs steps to collect obs for the next request
+        new_prediction_at = n_act/2 # This equals 4 for n_act=8. Dont make this too small otherwise there are not enough observations yet
         i = 0
         have_next = False
         next_chunk = None
@@ -379,6 +379,7 @@ class RecordingManager(ABC):
             frame_start = time.time()
 
             # Step with the current action
+            obs_buf.append(env._get_obs())
             action = current_chunk[i]
             try:
                 obs, *_ = env.step(action, block=False)
@@ -390,18 +391,19 @@ class RecordingManager(ABC):
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
             # issue prefetch just once per chunk
-            if (not have_next) and (i >= prefetch_at - 1):
+            if (not have_next) and (i >= len(current_chunk)-new_prediction_at):
                 conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
                 have_next = True
 
             i += 1
-            if i >= n_act:
+            if i >= len(current_chunk):
                 # swap in the prefetched chunk (blocking receive if needed)
                 if not have_next:
                     conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
                 next_chunk = conn.recv()
                 next_chunk = next_chunk.to("cpu").numpy()
-                current_chunk, next_chunk = next_chunk, None
+                # avoid using the first four chunks since they have already been used
+                current_chunk = next_chunk[-4:] # This chunk will then only have four elements
                 have_next = False
                 i = 0
 
@@ -410,8 +412,6 @@ class RecordingManager(ABC):
             if sleep_time > 0:
                 time.sleep(sleep_time) 
 
-            # maintain obs buffer for next request
-            obs_buf.append(env._get_obs())
 
 
         logger.debug("Finished recording...")
