@@ -332,7 +332,7 @@ class RecordingManager(ABC):
 
         self._handle_post_episode()
 
-    def record_episode_async(self, on_start, on_end, env, conn, task: str = "task"):
+    def record_episode_async(self, on_start, on_end, env, conn, replan_time, task: str = "task"):
         try:
             self._wait_for_start_signal()
         except StopIteration:
@@ -370,7 +370,7 @@ class RecordingManager(ABC):
         current_chunk = current_chunk.to("cpu").numpy()  # shape: (T, action_dim) after squeeze inside worker
 
         # prefetch threshold: request next chunk when we are close to finishing current one
-        new_prediction_at = n_act/2 # This equals 4 for n_act=8. Dont make this too small otherwise there are not enough observations yet
+        new_prediction_at = replan_time #Dont make this too small otherwise there are not enough observations yet
         i = 0
         have_next = False
         next_chunk = None
@@ -403,7 +403,7 @@ class RecordingManager(ABC):
                 next_chunk = conn.recv()
                 next_chunk = next_chunk.to("cpu").numpy()
                 # avoid using the first four chunks since they have already been used
-                current_chunk = next_chunk[-4:] # This chunk will then only have four elements
+                current_chunk = next_chunk[-replan_time:] # This chunk will then only have four elements
                 have_next = False
                 i = 0
 

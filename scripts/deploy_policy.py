@@ -96,9 +96,9 @@ parser.add_argument(
 
 parser.add_argument(
    "--async-inference",
-    action="store_true",
-    default=False,
-    help="Use asynchronous chunked policy inference (double-buffered).",
+    type=int,
+    default=0,
+    help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter by that number for consitency",
 )
 
 
@@ -220,6 +220,7 @@ with recording_manager:
                 env=env,
                 conn=parent_conn,
                 task="Pick up the lego block.",
+                replan_time=args.async_inference,
             )
         else:
             recording_manager.record_episode(
