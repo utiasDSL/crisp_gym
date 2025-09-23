@@ -125,14 +125,14 @@ for arg, value in vars(args).items():
 
 
 # Validate arguments not passed by the user
-if args.follower_namespace is None and not args.use_streamed_teleop:
+if args.follower_namespace is None:
     args.follower_namespace = prompt.prompt(
         "Please enter the follower robot namespace (e.g., 'left', 'right', ...)",
         default="right",
     )
     logger.info(f"Using follower namespace: {args.follower_namespace}")
 
-if args.leader_namespace is None:
+if args.leader_namespace is None and not args.use_streamed_teleop:
     args.leader_namespace = prompt.prompt(
         "Please enter the leader robot namespace (e.g., 'left', 'right', ...)",
         default="left",
@@ -164,7 +164,7 @@ try:
 
     env = make_env(
         env_type=args.follower_config,
-        ctrl_type=ctrl_type,
+        control_type=ctrl_type,
         namespace=args.follower_namespace,
     )
 
