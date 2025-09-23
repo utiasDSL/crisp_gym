@@ -9,6 +9,7 @@ import logging
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
+from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
 import torch
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
@@ -20,7 +21,54 @@ if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
     from crisp_gym.manipulator_env import ManipulatorBaseEnv
+    from crisp_gym.manipulator_env import ManipulatorCartesianEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
+
+
+def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamedPose) -> Callable:
+    """Create a teleoperation function for the leader robot using streamed pose data."""
+    prev_pose = leader.last_pose
+    first_step = True
+
+    def _fn() -> tuple:
+        """Teleoperation function to be called in each step.
+
+        This function computes the action based on the current end-effector pose
+        or joint values of the leader robot, updates the gripper value, and steps
+        the environment.
+
+        Returns:
+            tuple: A tuple containing the observation from the environment and the action taken.
+        """
+        nonlocal prev_pose, first_step
+        if first_step:
+            first_step = False
+            prev_pose = leader.last_pose
+            return None, None
+
+        pose = leader.last_pose
+        action_pose = pose - prev_pose
+        prev_pose = pose
+
+        if env.gripper.value is None:
+            gripper = 0.0
+        else:
+            gripper = env.gripper.value + np.clip(
+                leader.last_gripper - env.gripper.value,
+                -env.gripper.config.max_delta,
+                env.gripper.config.max_delta,
+            )
+
+        action = np.concatenate(
+            [
+                list(action_pose.position) + list(action_pose.orientation.as_euler("xyz")),
+                [gripper],
+            ]
+        )
+        obs, *_ = env.step(action, block=False)
+        return obs, action
+
+    return _fn
 
 
 def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
@@ -103,8 +151,6 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
         return obs, action
 
     return _fn
-
-
 
 
 def inference_worker(
