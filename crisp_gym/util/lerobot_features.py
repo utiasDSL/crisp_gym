@@ -272,8 +272,7 @@ def numpy_obs_to_torch(obs: Dict[str, Any]) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Example usage
     env = make_env("right_aloha_franka")
-    features = get_features(env, ctrl_type="cartesian", use_video=True)
+    features = get_features(env, use_video=True)
 
     rich.print(features)
