@@ -11,9 +11,9 @@ from typing import TYPE_CHECKING, Callable
 import numpy as np
 import torch
 from lerobot.configs.train import TrainPipelineConfig
+from lerobot.constants import OBS_IMAGES
 from lerobot.policies.factory import get_policy_class
 from lerobot.policies.utils import populate_queues
-from lerobot.constants import OBS_IMAGES
 
 from crisp_gym.util.control_type import ControlType
 
@@ -110,7 +110,7 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
     return _fn
 
 
-def inference_worker(
+def inference_worker(  # noqa: D417
     conn: Connection,
     pretrained_path: str,
     env: ManipulatorBaseEnv,

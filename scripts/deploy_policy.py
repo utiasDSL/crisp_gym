@@ -5,6 +5,9 @@ import logging
 import time
 from multiprocessing import Pipe, Process
 
+from lerobot.configs.train import TrainPipelineConfig
+from lerobot.policies.factory import get_policy_class
+
 import crisp_gym  # noqa: F401
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
@@ -13,8 +16,6 @@ from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
-from lerobot.configs.train import TrainPipelineConfig
-from lerobot.policies.factory import get_policy_class
 
 # import debugpy
 # debugpy.listen(("0.0.0.0", 5678))

@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections import deque
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -15,8 +16,6 @@ import rclpy
 # TODO: make this optional, we do not want to depend on lerobot
 from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.policies.normalize import Normalize
-from collections import deque
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
@@ -273,7 +272,7 @@ class RecordingManager(ABC):
         self.queue.task_done()
         logger.info("Writter process finished.")
 
-    def record_episode(
+    def record_episode(  # noqa: D417
         self,
         data_fn: Callable[[], tuple[dict, dict]],
         task: str,
@@ -333,7 +332,7 @@ class RecordingManager(ABC):
 
         self._handle_post_episode()
 
-    def record_episode_inf(self, on_start, on_end, env, conn, replan_time, n_obs, n_act, task: str = "task"):
+    def record_episode_inf(self, on_start, on_end, env, conn, replan_time, n_obs, n_act, task: str = "task"):  # noqa: ANN001, D102
         try:
             self._wait_for_start_signal()
         except StopIteration:
@@ -395,7 +394,7 @@ class RecordingManager(ABC):
 
             # step done
             i += 1
-            
+
             # when done with one episode reset the counter
             if i >= (len(current_chunk)):
                 i = 0
