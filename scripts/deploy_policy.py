@@ -8,11 +8,13 @@ from multiprocessing import Pipe, Process
 import crisp_gym  # noqa: F401
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
-from crisp_gym.record.record_functions import inference_worker, make_policy_fn, inference_worker_async
+from crisp_gym.record.record_functions import inference_worker
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
+from lerobot.configs.train import TrainPipelineConfig
+from lerobot.policies.factory import get_policy_class
 
 # import debugpy
 # debugpy.listen(("0.0.0.0", 5678))
@@ -175,9 +177,8 @@ parent_conn, child_conn = Pipe()
 
 
 # Start inference process
-worker_target = inference_worker_async if args.async_inference else inference_worker
 inf_proc = Process(
-    target=worker_target,
+    target=inference_worker,
     kwargs={
         "conn": child_conn,
         "pretrained_path": args.path,
@@ -188,6 +189,25 @@ inf_proc = Process(
 inf_proc.start()
 
 time.sleep(1.0)  # Give some time for the process to start
+
+# Get information about the number of actions that should be executed and the number of observations that are required 
+train_config = TrainPipelineConfig.from_pretrained(args.path)
+policy_cls = get_policy_class(train_config.policy.type)
+policy = policy_cls.from_pretrained(args.path)
+cfg = policy.config
+n_obs = int(cfg.n_obs_steps)
+n_act = int(cfg.n_action_steps)
+
+# Check if the replan time is correct 
+replan_time=args.async_inference 
+if replan_time is None or replan_time <= 0:
+    replan_time = n_act
+elif replan_time > n_act:
+    logging.warning("replan_time > n_action_steps; clamping.")
+    replan_time = n_act
+elif replan_time < n_act // 2:
+    logging.warning("replan_time < n_action_steps/2 may increase stalls.")
+
 
 logging.info("Homing robot before starting with recording.")
 
@@ -213,22 +233,16 @@ with recording_manager:
             f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
         )
 
-        if args.async_inference:
-            recording_manager.record_episode_async(
-                on_start=on_start,
-                on_end=on_end,
-                env=env,
-                conn=parent_conn,
-                task="Pick up the lego block.",
-                replan_time=args.async_inference,
-            )
-        else:
-            recording_manager.record_episode(
-                data_fn=make_policy_fn(env, parent_conn),
-                task="Pick up the lego block.",
-                on_start=on_start,
-                on_end=on_end,
-            )
+        recording_manager.record_episode_inf(
+            on_start=on_start,
+            on_end=on_end,
+            env=env,
+            conn=parent_conn,
+            task="Pick up the lego block.",
+            replan_time=replan_time,
+            n_obs=n_obs,
+            n_act=n_act,
+        )
 
         logging.info("Episode finished. Waiting for the next episode to start.")
 

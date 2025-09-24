@@ -333,7 +333,7 @@ class RecordingManager(ABC):
 
         self._handle_post_episode()
 
-    def record_episode_async(self, on_start, on_end, env, conn, replan_time, task: str = "task"):
+    def record_episode_inf(self, on_start, on_end, env, conn, replan_time, n_obs, n_act, task: str = "task"):
         try:
             self._wait_for_start_signal()
         except StopIteration:
@@ -346,17 +346,6 @@ class RecordingManager(ABC):
 
         logger.info("Started recording episode.")
 
-        # Warm up the model to recieve an inital action chunk 
-        meta = conn.recv()
-        if not (isinstance(meta, dict) and "type" in meta and meta["type"] == "META"):
-            logger.error("Async worker did not send META. Falling back to paused state.")
-            self.state = "paused"
-            self._handle_post_episode()
-            return
-        n_obs = int(meta["n_obs_steps"])
-        n_act = int(meta["n_action_steps"])
-        logger.info(f"Using n_obs_steps={n_obs}, n_action_steps={n_act}")
-
         # rolling buffer of last n_obs observations to request the next chunk
         obs_buf: deque = deque(maxlen=n_obs)
 
@@ -365,37 +354,26 @@ class RecordingManager(ABC):
             obs_buf.append(env._get_obs())
             time.sleep(1 / self.fps)
 
-        # request first chunk
+        # prepare first chunk
         conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-
-        # check if reasonable replantime has been passed 
-        if (replan_time == None):
-            replan_time = n_act
-
-        elif (replan_time > n_act):
-            logger.error("replan_time is higher than number of actions")
-
-        elif (replan_time < (n_act/2)):
-            logger.error("replan_time smakker than half of the number of actions does not make sense")
-
-
+        
         i = 0
         next_chunk = None
 
         while self.state == "recording":
             frame_start = time.time()
-
-            # start inference for the new chunk 
+            # load a new chunk when an old chunk is finished
             if i==0:
                 next_chunk = conn.recv()
-                current_chunk = next_chunk[n_act-replan_time:]
-                conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                current_chunk = next_chunk[n_act-replan_time:] 
+                print ("Lengh ot the new current chunk:",len(current_chunk))
 
             # get current observation
             obs_buf.append(env._get_obs())
 
             # execute action
             action = current_chunk[i]
+            print("Process element:",i)
             try:
                 obs, *_ = env.step(action, block=False)
             except Exception as e:
@@ -404,6 +382,11 @@ class RecordingManager(ABC):
 
             # push frame to writer
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
+
+            # start a new inference at 
+            if i ==(2*replan_time-n_act):
+                conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                print("Starting new inference")
 
             # step done
             i += 1
