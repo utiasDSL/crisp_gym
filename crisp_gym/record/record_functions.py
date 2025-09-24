@@ -196,7 +196,6 @@ def inference_worker_async(
     Args:
         conn (Connection): The connection to the parent process for sending and receiving data.
         pretrained_path (str): Path to the pretrained policy model.
-        dataset_metadata (LeRobotDatasetMetadata): Metadata for the dataset, if needed.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -215,7 +214,7 @@ def inference_worker_async(
     policy.reset()
     policy.to(device).eval()
 
-    # read policy config to know obs/action window sizes
+    # Read policy config to know obs/action window sizes
     cfg = policy.config
     n_obs = int(cfg.n_obs_steps)
     n_act = int(cfg.n_action_steps)
@@ -224,6 +223,7 @@ def inference_worker_async(
     conn.send({"type": "META", "n_obs_steps": n_obs, "n_action_steps": n_act})
 
     while True:
+        # Check if messages are recieved correctly
         msg = conn.recv()
         if msg is None:
             break
@@ -243,8 +243,7 @@ def inference_worker_async(
         obs_seq = obs_seq[-n_obs:]
 
         # Make the policy predict an action chunk for the current obeservation.
-        # Therefore we follow the implementation on the Lerobot side for select_action 
-        # and predict_action_chunk 
+        # Therefore we follow the implementation on the Lerobot side for select_action() which calls predict_action_chunk()
         with torch.inference_mode():
             for i in range(n_obs):
                 last= obs_seq[i]
@@ -258,28 +257,24 @@ def inference_worker_async(
                 for cam in env.cameras:
                     img = last[f"{cam.config.camera_name}_image"]
                     batch[f"observation.images.{cam.config.camera_name}"] = (
-                        torch.from_numpy(img)
-                        .permute(2, 0, 1)
-                        .unsqueeze(0)
-                        .to(device=device, dtype=torch.float32)
-                        / 255
+                        torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=torch.float32)/ 255
                     )
-                # This mirrors `select_action` pre-processing so queues are filled correctly
+
+                # This mirrors Lerobot `select_action()` pre-processing so queues are filled correctly
                 batch_norm = policy.normalize_inputs(batch)
                 if policy.config.image_features:
-                    # shallow copy then add OBS_IMAGES stack
-                    batch_norm = dict(batch_norm)
-                    from lerobot.constants import OBS_IMAGES
+                    batch_norm = dict(batch_norm) # shallow copy then add OBS_IMAGES stack
                     batch_norm[OBS_IMAGES] = torch.stack(
                         [batch_norm[k] for k in policy.config.image_features], dim=-4
                     )
+                # Note: It's important that this happens after stacking the images into a single key.
                 policy._queues = populate_queues(policy._queues, batch_norm)
 
-            # Now produce a fresh chunk
+            # Now get a fresh chunk
             chunk = policy.predict_action_chunk(batch_norm)  
-            chunk = chunk.squeeze(0).to(device="cpu")
+            chunk = chunk.squeeze(0).to(device="cpu").numpy()
 
-        logging.debug(f"[Inference-Async] Computed chunk with shape {tuple(chunk.shape)}")
+        logging.debug(f"[Inference] Computed chunk with shape {tuple(chunk.shape)}")
         conn.send(chunk)
 
     conn.close()

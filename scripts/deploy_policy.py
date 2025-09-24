@@ -97,8 +97,8 @@ parser.add_argument(
 parser.add_argument(
    "--async-inference",
     type=int,
-    default=0,
-    help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter by that number for consitency",
+    default=None,
+    help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter by that number for consitency. If no value is passed no async inference is done",
 )
 
 

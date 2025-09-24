@@ -312,7 +312,8 @@ class RecordingManager(ABC):
                 sleep_time = 1 / self.fps - (time.time() - frame_start)
                 time.sleep(sleep_time)
                 continue
-
+            
+            # Check if this is the correct way to store the episodes
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
             sleep_time = 1 / self.fps - (time.time() - frame_start)
@@ -345,7 +346,7 @@ class RecordingManager(ABC):
 
         logger.info("Started recording episode.")
 
-
+        # Warm up the model to recieve an inital action chunk 
         meta = conn.recv()
         if not (isinstance(meta, dict) and "type" in meta and meta["type"] == "META"):
             logger.error("Async worker did not send META. Falling back to paused state.")
@@ -354,32 +355,46 @@ class RecordingManager(ABC):
             return
         n_obs = int(meta["n_obs_steps"])
         n_act = int(meta["n_action_steps"])
-        logger.info(f"[Async] Using n_obs_steps={n_obs}, n_action_steps={n_act}")
+        logger.info(f"Using n_obs_steps={n_obs}, n_action_steps={n_act}")
 
         # rolling buffer of last n_obs observations to request the next chunk
         obs_buf: deque = deque(maxlen=n_obs)
 
-        # prime: gather n_obs observations without stepping (env._get_obs() reads current sensors/images)
+        # gather n_obs observations without stepping (env._get_obs() reads current sensors/images)
         for _ in range(n_obs):
             obs_buf.append(env._get_obs())
             time.sleep(1 / self.fps)
 
         # request first chunk
         conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-        current_chunk = conn.recv()  # torch.Tensor on GPU or CPU
-        current_chunk = current_chunk.to("cpu").numpy()  # shape: (T, action_dim) after squeeze inside worker
 
-        # prefetch threshold: request next chunk when we are close to finishing current one
-        new_prediction_at = replan_time #Dont make this too small otherwise there are not enough observations yet
+        # check if reasonable replantime has been passed 
+        if (replan_time == None):
+            replan_time = n_act
+
+        elif (replan_time > n_act):
+            logger.error("replan_time is higher than number of actions")
+
+        elif (replan_time < (n_act/2)):
+            logger.error("replan_time smakker than half of the number of actions does not make sense")
+
+
         i = 0
-        have_next = False
         next_chunk = None
 
         while self.state == "recording":
             frame_start = time.time()
 
-            # Step with the current action
+            # start inference for the new chunk 
+            if i==0:
+                next_chunk = conn.recv()
+                current_chunk = next_chunk[n_act-replan_time:]
+                conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+
+            # get current observation
             obs_buf.append(env._get_obs())
+
+            # execute action
             action = current_chunk[i]
             try:
                 obs, *_ = env.step(action, block=False)
@@ -390,28 +405,23 @@ class RecordingManager(ABC):
             # push frame to writer
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
-            # issue prefetch just once per chunk
-            if (not have_next) and (i >= len(current_chunk)-new_prediction_at):
-                conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-                have_next = True
-
+            # step done
             i += 1
-            if i >= len(current_chunk):
-                # swap in the prefetched chunk (blocking receive if needed)
-                if not have_next:
-                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-                next_chunk = conn.recv()
-                next_chunk = next_chunk.to("cpu").numpy()
-                # avoid using the first four chunks since they have already been used
-                current_chunk = next_chunk[-replan_time:] # This chunk will then only have four elements
-                have_next = False
+            
+            # when done with one episode reset the counter
+            if i >= (len(current_chunk)):
                 i = 0
 
             # pacing
             sleep_time = 1 / self.fps - (time.time() - frame_start)
             if sleep_time > 0:
-                time.sleep(sleep_time) 
-
+                time.sleep(sleep_time)
+            else:
+                logger.warning(
+                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS. "
+                    "Consider decreasing the FPS or optimizing the data function."
+                )
+            logger.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
 
 
         logger.debug("Finished recording...")
