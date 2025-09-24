@@ -114,6 +114,7 @@ def inference_worker(
     conn: Connection,
     pretrained_path: str,
     env: ManipulatorBaseEnv,
+    steps: int,
 ):  # noqa: ANN001
     """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
 

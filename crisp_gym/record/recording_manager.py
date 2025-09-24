@@ -368,6 +368,16 @@ class RecordingManager(ABC):
                 current_chunk = next_chunk[n_act-replan_time:] 
                 print ("Lengh ot the new current chunk:",len(current_chunk))
 
+            # Start prediction
+            if i ==(2*replan_time-n_act):
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                    print("Starting new inference")
+            
+            elif n_act==(2*replan_time-n_act):
+                if (i+1) ==(2*replan_time-n_act):
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                    print("Starting new inference")
+
             # get current observation
             obs_buf.append(env._get_obs())
 
@@ -382,11 +392,6 @@ class RecordingManager(ABC):
 
             # push frame to writer
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
-
-            # start a new inference at 
-            if i ==(2*replan_time-n_act):
-                conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-                print("Starting new inference")
 
             # step done
             i += 1

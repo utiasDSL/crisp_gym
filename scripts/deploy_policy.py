@@ -103,6 +103,13 @@ parser.add_argument(
     help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter by that number for consitency. If no value is passed no async inference is done",
 )
 
+parser.add_argument(
+   "--inference-steps",
+    type=int,
+    default=None,
+    help="How many steps should the policy use from its prediciton",
+)
+
 
 args = parser.parse_args()
 setup_logging(args.log_level)
@@ -183,6 +190,7 @@ inf_proc = Process(
         "conn": child_conn,
         "pretrained_path": args.path,
         "env": env,
+        "steps": args.inference_steps,
     },
     daemon=True,
 )
