@@ -111,6 +111,15 @@ parser.add_argument(
     help="How many steps should the policy use from its prediciton",
 )
 
+parser.add_argument(
+   "--apply-impating",
+    type=argparse.BooleanOptionalAction,
+    default=True,
+    help="Wether to use the already predicted action chunks executed during async inference as groundtruth in the denoising steps",
+)
+
+
+
 
 args = parser.parse_args()
 setup_logging(args.log_level)
@@ -160,6 +169,12 @@ if args.env_config is None:
     )
     logging.info(f"Using follower configuration: {args.env_config}")
 
+if args.async_inference is None: 
+    args.async_inference = prompt.prompt(
+        "Please enter when to start the prediction of a new action chunk during execution",
+        default="8",
+    )
+    logging.info(f"Replanning at: {args.async_inference}")
 
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
@@ -200,6 +215,8 @@ inf_proc.start()
 time.sleep(1.0)  # Give some time for the process to start
 
 # Get information about the number of actions that should be executed and the number of observations that are required 
+# It is important to do this after the inference process has been started. 
+# ToDo find out why this is the case 
 train_config = TrainPipelineConfig.from_pretrained(args.path)
 policy_cls = get_policy_class(train_config.policy.type)
 policy = policy_cls.from_pretrained(args.path)
@@ -209,13 +226,15 @@ n_act = int(cfg.n_action_steps)
 
 # Check if the replan time is correct 
 replan_time=args.async_inference 
-if replan_time is None or replan_time <= 0:
-    replan_time = n_act
+if replan_time <= 0:
+    logging.warning(f"replan_time={replan_time} can not be smaller zero")
+    exit(1)
 elif replan_time > n_act:
-    logging.warning("replan_time > n_action_steps; clamping.")
-    replan_time = n_act
+    logging.warning(f"replan_time={replan_time} > n_action_steps={n_act}")
+    exit(1)
 elif replan_time < n_act // 2:
-    logging.warning("replan_time < n_action_steps/2 may increase stalls.")
+    logging.warning(f"replan_time={replan_time} < n_action_steps/2={n_act/2} will stall.")
+    exit(1)
 
 
 logging.info("Homing robot before starting with recording.")
@@ -242,7 +261,7 @@ with recording_manager:
             f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
         )
 
-        recording_manager.record_episode_inf(
+        recording_manager.record_episode_inference(
             on_start=on_start,
             on_end=on_end,
             env=env,

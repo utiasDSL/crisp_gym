@@ -332,7 +332,7 @@ class RecordingManager(ABC):
 
         self._handle_post_episode()
 
-    def record_episode_inf(self, on_start, on_end, env, conn, replan_time, n_obs, n_act, task: str = "task"):  # noqa: ANN001, D102
+    def record_episode_inference(self, on_start, on_end, env, conn, replan_time, n_obs, n_act, task: str = "task"):  # noqa: ANN001, D102
         try:
             self._wait_for_start_signal()
         except StopIteration:

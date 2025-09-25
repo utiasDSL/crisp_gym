@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import torch
+from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.constants import OBS_IMAGES
 from lerobot.policies.factory import get_policy_class
@@ -114,7 +115,7 @@ def inference_worker(  # noqa: D417
     conn: Connection,
     pretrained_path: str,
     env: ManipulatorBaseEnv,
-    steps: int,
+    steps: int| None,
 ):  # noqa: ANN001
     """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
 
@@ -131,7 +132,28 @@ def inference_worker(  # noqa: D417
             "Please ensure the policy is correctly configured."
         )
     policy_cls = get_policy_class(train_config.policy.type)
-    policy = policy_cls.from_pretrained(pretrained_path)
+    
+    if steps is not None:
+        policy_config = PreTrainedConfig.from_pretrained(pretrained_path)
+        # Check if the number of steps make sense 
+        horizon=policy_config.horizon
+        if steps >= horizon: 
+            raise ValueError(
+            f"The policy steps={steps} must be smaller than the horizon={horizon}. "
+            "Please modify your cli."
+        )
+        obs=policy_config.n_obs_steps
+        if steps <= obs: 
+            raise ValueError(
+            f"The policy must give out steps={steps} bigger than the observation horizon={obs}. "
+            "Please modify your cli."
+        )
+        policy_config.n_action_steps = int(steps)
+         # Overwrite to load the new model with the modified config file
+        policy = policy_cls.from_pretrained(pretrained_path,config=policy_config)
+
+    else: 
+        policy = policy_cls.from_pretrained(pretrained_path)
 
     logging.info(
         f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
@@ -142,6 +164,7 @@ def inference_worker(  # noqa: D417
     # Read policy config to know obs/action window sizes
     cfg = policy.config
     n_obs = int(cfg.n_obs_steps)
+    print("Ready to recive information")
 
     while True:
         # Check if messages are recieved correctly
