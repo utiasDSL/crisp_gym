@@ -363,17 +363,16 @@ class RecordingManager(ABC):
             frame_start = time.time()
             # load a new chunk when an old chunk is finished
             if i==0:
+                # Edge case when we want to make a new prediction after all action chunks have been used up  
+                if n_act==replan_time:
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                    print("Starting new inference")
                 next_chunk = conn.recv()
                 current_chunk = next_chunk[n_act-replan_time:] 
                 print ("Lengh ot the new current chunk:",len(current_chunk))
 
             # Start prediction
             if i ==(2*replan_time-n_act):
-                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-                    print("Starting new inference")
-            
-            elif n_act==(2*replan_time-n_act):
-                if (i+1) ==(2*replan_time-n_act):
                     conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
                     print("Starting new inference")
 
@@ -409,7 +408,6 @@ class RecordingManager(ABC):
                     "Consider decreasing the FPS or optimizing the data function."
                 )
             logger.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
-
 
         logger.debug("Finished recording...")
 

@@ -222,7 +222,11 @@ policy_cls = get_policy_class(train_config.policy.type)
 policy = policy_cls.from_pretrained(args.path)
 cfg = policy.config
 n_obs = int(cfg.n_obs_steps)
-n_act = int(cfg.n_action_steps)
+
+if args.inference_steps is not None:
+    n_act= args.inference_steps
+else:
+    n_act = int(cfg.n_action_steps)
 
 # Check if the replan time is correct 
 replan_time=args.async_inference 
