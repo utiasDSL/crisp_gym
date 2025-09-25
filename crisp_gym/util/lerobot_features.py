@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 def get_features(
     env: ManipulatorBaseEnv,
     use_video: bool = True,
+    ignore_keys: list[str] = None,
 ) -> Dict[str, Dict]:
     """Get the features used by LeRobotDataset.
 
@@ -37,6 +38,7 @@ def get_features(
         env (ManipulatorBaseEnv): The environment configuration object.
         ctrl_type (str): The type of control used, either "joint" or "cartesian". Defaults to "cartesian".
         use_video (bool): Whether to include video features. Defaults to True.
+        ignore_keys (list[str], optional): List of observation keys to ignore. Defaults to None.
     """
     if not CODEBASE_VERSION.startswith("v2"):
         logger.warning(
@@ -66,6 +68,9 @@ def get_features(
     state_feature_names = []
 
     for feature_key in env.observation_space.keys():
+        if ignore_keys and feature_key in ignore_keys:
+            continue
+
         if feature_key.startswith("observation.state"):
             # Proprioceptive state features
             feature_shape = env.observation_space[feature_key].shape
@@ -93,7 +98,7 @@ def get_features(
                 "shape": feature_shape,
                 "names": names,
             }
-            state_feature_length += np.prod(feature_shape)
+            state_feature_length += int(np.prod(feature_shape))
             state_feature_names += names
 
         elif feature_key.startswith("task"):
@@ -135,7 +140,7 @@ def get_features(
     # Combined state feature
     features["observation.state"] = {
         "dtype": "float32",
-        "shape": (state_feature_length,),
+        "shape": (int(state_feature_length),),
         "names": state_feature_names,
     }
 
