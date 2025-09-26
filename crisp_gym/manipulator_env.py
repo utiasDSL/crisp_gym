@@ -333,7 +333,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.ctrl_type = ControlType.CARTESIAN
 
         # TODO: Make this configurable
-        self._min_z_height = 0.0
+        self._min_z_height = 0.05
 
         self.action_space = gym.spaces.Box(
             low=np.concatenate(

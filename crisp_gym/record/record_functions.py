@@ -116,6 +116,8 @@ def inference_worker(  # noqa: D417
     pretrained_path: str,
     env: ManipulatorBaseEnv,
     steps: int| None,
+    inpainting: bool,
+    replan_time: int,
 ):  # noqa: ANN001
     """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
 
@@ -165,6 +167,11 @@ def inference_worker(  # noqa: D417
     cfg = policy.config
     n_obs = int(cfg.n_obs_steps)
     print("Ready to recive information")
+
+    # Set up the policy to consider inpainting. This requires updating the default policies 
+    if inpainting:
+        # How much to reuse the steps from a previous prediction 
+        policy.inpainting = int(replan_time)
 
     while True:
         # Check if messages are recieved correctly

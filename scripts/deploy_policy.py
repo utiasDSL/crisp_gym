@@ -9,6 +9,7 @@ from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 
 import crisp_gym  # noqa: F401
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import inference_worker
@@ -112,14 +113,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
-   "--apply-impating",
-    type=argparse.BooleanOptionalAction,
-    default=True,
+   "--inpainting",
+    type=bool,
+    default=False,
     help="Wether to use the already predicted action chunks executed during async inference as groundtruth in the denoising steps",
 )
-
-
-
 
 args = parser.parse_args()
 setup_logging(args.log_level)
@@ -170,14 +168,12 @@ if args.env_config is None:
     logging.info(f"Using follower configuration: {args.env_config}")
 
 if args.async_inference is None: 
-    args.async_inference = prompt.prompt(
-        "Please enter when to start the prediction of a new action chunk during execution",
-        default="8",
-    )
-    logging.info(f"Replanning at: {args.async_inference}")
+    logging.warning("--async_inference needs to be set correctly")
+    exit(1)
 
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
+env.robot.config.home_config= home_close_to_table
 
 # %% Prepare the dataset
 features = get_features(env.config, ctrl_type=ctrl_type)
@@ -207,6 +203,8 @@ inf_proc = Process(
         "pretrained_path": args.path,
         "env": env,
         "steps": args.inference_steps,
+        "inpainting": args.inpainting,
+        "replan_time": args.async_inference, 
     },
     daemon=True,
 )
