@@ -364,6 +364,7 @@ class RecordingManager(ABC):
             # load a new chunk when an old chunk is finished
             if i==0:
                 # Edge case when we want to make a new prediction after all action chunks have been used up  
+                # To be fixed 
                 if n_act==replan_time:
                     conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
                     print("Starting new inference")
