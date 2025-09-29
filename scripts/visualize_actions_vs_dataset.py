@@ -9,7 +9,7 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.policies.factory import get_policy_class
 
 #Anything that the policy should not read 
-SUPERVISION_PREFIXES = ("action", "next.", "target", "labels")  
+SUPERVISION_PREFIXES = ("action","target")  
 
 def to_device_batch(batch: dict, device: torch.device, non_blocking: bool = True) -> dict:  # noqa: D103
     out = {}
