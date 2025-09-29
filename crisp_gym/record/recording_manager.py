@@ -6,6 +6,7 @@ import subprocess
 import threading
 import time
 from abc import ABC, abstractmethod
+from collections import deque
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -271,12 +272,13 @@ class RecordingManager(ABC):
         self.queue.task_done()
         logger.info("Writter process finished.")
 
-    def record_episode(
+    def record_episode(  # noqa: D417
         self,
         data_fn: Callable[[], tuple[dict, dict]],
         task: str,
         on_start: Callable[[], None] | None = None,
         on_end: Callable[[], None] | None = None,
+        env: None = None,
     ) -> None:
         """Record a single episode from user-provided data function.
 
@@ -309,7 +311,8 @@ class RecordingManager(ABC):
                 sleep_time = 1 / self.fps - (time.time() - frame_start)
                 time.sleep(sleep_time)
                 continue
-
+            
+            # Check if this is the correct way to store the episodes
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
             sleep_time = 1 / self.fps - (time.time() - frame_start)
@@ -329,6 +332,93 @@ class RecordingManager(ABC):
 
         self._handle_post_episode()
 
+    def record_episode_inference(self, on_start, on_end, env, conn, replan_time, n_obs, n_act, task: str = "task"):  # noqa: ANN001, D102
+        try:
+            self._wait_for_start_signal()
+        except StopIteration:
+            logger.info("Recording manager is shutting down.")
+            return
+
+        if on_start:
+            logger.info("Resetting Environment.")
+            on_start()
+
+        logger.info("Started recording episode.")
+
+        # rolling buffer of last n_obs observations to request the next chunk
+        obs_buf: deque = deque(maxlen=n_obs)
+
+        # gather n_obs observations without stepping (env._get_obs() reads current sensors/images)
+        for _ in range(n_obs):
+            obs_buf.append(env._get_obs())
+            time.sleep(1 / self.fps)
+
+        # prepare first chunk
+        if n_act != replan_time:
+            conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+            print("Starting new inference_start")
+        
+        i = 0
+        next_chunk = None
+
+        while self.state == "recording":
+            frame_start = time.time()
+            # load a new chunk when an old chunk is finished
+            if i==0:
+                # Edge case when we want to make a new prediction after all action chunks have been used up  
+                # To be fixed 
+                if n_act==replan_time:
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                    print("Starting new inference_1")
+                next_chunk = conn.recv()
+                current_chunk = next_chunk[n_act-replan_time:] 
+                print ("Lengh ot the new current chunk:",len(current_chunk))
+
+            # Start prediction
+            if i ==(2*replan_time-n_act):
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                    print("Starting new inference_2")
+
+            # get current observation
+            obs_buf.append(env._get_obs())
+
+            # execute action
+            action = current_chunk[i]
+            print("Process element:",i)
+            try:
+                obs, *_ = env.step(action, block=False)
+            except Exception as e:
+                logger.error(f"Error during environment step: {e}")
+                break
+
+            # push frame to writer
+            self.queue.put({"type": "FRAME", "data": (obs, action, task)})
+
+            # step done
+            i += 1
+
+            # when done with one episode reset the counter
+            if i >= (len(current_chunk)):
+                i = 0
+
+            # pacing
+            sleep_time = 1 / self.fps - (time.time() - frame_start)
+            if sleep_time > 0:
+                time.sleep(sleep_time)
+            else:
+                logger.warning(
+                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS. "
+                    "Consider decreasing the FPS or optimizing the data function."
+                )
+            logger.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
+
+        logger.debug("Finished recording...")
+
+        if on_end:
+            on_end()
+
+        self._handle_post_episode()
+        
     def _wait_for_start_signal(self) -> None:
         """Wait until the recording state is set to 'recording'."""
         logger.info("Waiting to start recording...")

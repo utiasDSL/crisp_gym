@@ -19,6 +19,8 @@ make = "*"
 ninja = "*"
 typing_inspect = ">=0.9.0,<0.10"
 libstdcxx-ng = ">=12.2.0"
+debugpy = ">=1.8.14,<2"
+ffmpeg = ">=4,<8"
 
 [target.linux.dependencies]
 libgl-devel = "*"
@@ -36,8 +38,8 @@ pre-commit = "*"
 ruff = "*"
 
 [feature.lerobot.pypi-dependencies]
-# lerobot = { path = "../lerobot", editable = false }
-lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
+lerobot = { path = "../lerobot", editable = true, extras = ["smolvla"]}
+# lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
 rich = ">=14.0.0, <15"
 
 [feature.lerobot.dependencies]
@@ -68,7 +70,7 @@ ros-jazzy-rmw-cyclonedds-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-# crisp_python = { path = "../crisp_py", editable = false }
+crisp_python = { path = "../crisp_py", editable = true }
 
 [tasks]
 configure = "bash scripts/configure.sh"

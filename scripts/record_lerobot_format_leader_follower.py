@@ -1,4 +1,9 @@
 """Script showcasing how to record data in Lerobot Format."""
+# import debugpy
+# debugpy.listen(("0.0.0.0", 5678))
+# print("Waiting for debugger attach…")
+# debugpy.wait_for_client()   
+# print("Hello, Debugging!")
 
 import argparse
 import logging
@@ -7,6 +12,7 @@ import numpy as np
 import rclpy  # noqa: F401
 
 import crisp_gym  # noqa: F401
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.config.path import CRISP_CONFIG_PATH
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
@@ -162,6 +168,7 @@ try:
     )
 
     leader = make_leader(args.leader_config, namespace=args.leader_namespace)
+    leader.robot.config.home_config= home_close_to_table
     leader.wait_until_ready()
 
     features = get_features(env_config=env.config, ctrl_type=ctrl_type)

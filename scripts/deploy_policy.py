@@ -5,14 +5,24 @@ import logging
 import time
 from multiprocessing import Pipe, Process
 
+from lerobot.configs.train import TrainPipelineConfig
+from lerobot.policies.factory import get_policy_class
+
 import crisp_gym  # noqa: F401
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
-from crisp_gym.record.record_functions import inference_worker, make_policy_fn
+from crisp_gym.record.record_functions import inference_worker
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
+
+# import debugpy
+# debugpy.listen(("0.0.0.0", 5678))
+# print("Waiting for debugger attach…")
+# debugpy.wait_for_client()   
+# print("Hello, Debugging!")
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -88,6 +98,26 @@ parser.add_argument(
     help="Namespace for the follower robot. This is used to identify the robot in the ROS ecosystem.",
 )
 
+parser.add_argument(
+   "--async-inference",
+    type=int,
+    default=None,
+    help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter by that number for consitency. If no value is passed no async inference is done",
+)
+
+parser.add_argument(
+   "--inference-steps",
+    type=int,
+    default=None,
+    help="How many steps should the policy use from its prediciton",
+)
+
+parser.add_argument(
+   "--inpainting",
+    type=bool,
+    default=False,
+    help="Wether to use the already predicted action chunks executed during async inference as groundtruth in the denoising steps",
+)
 
 args = parser.parse_args()
 setup_logging(args.log_level)
@@ -137,9 +167,13 @@ if args.env_config is None:
     )
     logging.info(f"Using follower configuration: {args.env_config}")
 
+if args.async_inference is None: 
+    logging.warning("--async_inference needs to be set correctly")
+    exit(1)
 
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
+env.robot.config.home_config= home_close_to_table
 
 # %% Prepare the dataset
 features = get_features(env.config, ctrl_type=ctrl_type)
@@ -168,12 +202,42 @@ inf_proc = Process(
         "conn": child_conn,
         "pretrained_path": args.path,
         "env": env,
+        "steps": args.inference_steps,
+        "inpainting": args.inpainting,
+        "replan_time": args.async_inference, 
     },
     daemon=True,
 )
 inf_proc.start()
 
 time.sleep(1.0)  # Give some time for the process to start
+
+# Get information about the number of actions that should be executed and the number of observations that are required 
+# It is important to do this after the inference process has been started. 
+# ToDo find out why this is the case 
+train_config = TrainPipelineConfig.from_pretrained(args.path)
+policy_cls = get_policy_class(train_config.policy.type)
+policy = policy_cls.from_pretrained(args.path)
+cfg = policy.config
+n_obs = int(cfg.n_obs_steps)
+
+if args.inference_steps is not None:
+    n_act= args.inference_steps
+else:
+    n_act = int(cfg.n_action_steps)
+
+# Check if the replan time is correct 
+replan_time=args.async_inference 
+if replan_time <= 0:
+    logging.warning(f"replan_time={replan_time} can not be smaller zero")
+    exit(1)
+elif replan_time > n_act:
+    logging.warning(f"replan_time={replan_time} > n_action_steps={n_act}")
+    exit(1)
+elif replan_time < n_act // 2:
+    logging.warning(f"replan_time={replan_time} < n_action_steps/2={n_act/2} will stall.")
+    exit(1)
+
 
 logging.info("Homing robot before starting with recording.")
 
@@ -199,11 +263,15 @@ with recording_manager:
             f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
         )
 
-        recording_manager.record_episode(
-            data_fn=make_policy_fn(env, parent_conn),
-            task="Pick up the lego block.",
+        recording_manager.record_episode_inference(
             on_start=on_start,
             on_end=on_end,
+            env=env,
+            conn=parent_conn,
+            task="Pick up the lego block.",
+            replan_time=replan_time,
+            n_obs=n_obs,
+            n_act=n_act,
         )
 
         logging.info("Episode finished. Waiting for the next episode to start.")

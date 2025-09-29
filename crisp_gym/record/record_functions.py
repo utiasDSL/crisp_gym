@@ -10,8 +10,11 @@ from typing import TYPE_CHECKING, Callable
 
 import numpy as np
 import torch
+from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
+from lerobot.constants import OBS_IMAGES
 from lerobot.policies.factory import get_policy_class
+from lerobot.policies.utils import populate_queues
 
 from crisp_gym.util.control_type import ControlType
 
@@ -108,17 +111,19 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
     return _fn
 
 
-def inference_worker(
+def inference_worker(  # noqa: D417
     conn: Connection,
     pretrained_path: str,
     env: ManipulatorBaseEnv,
+    steps: int| None,
+    inpainting: bool,
+    replan_time: int,
 ):  # noqa: ANN001
     """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
 
     Args:
         conn (Connection): The connection to the parent process for sending and receiving data.
         pretrained_path (str): Path to the pretrained policy model.
-        dataset_metadata (LeRobotDatasetMetadata): Metadata for the dataset, if needed.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -129,7 +134,28 @@ def inference_worker(
             "Please ensure the policy is correctly configured."
         )
     policy_cls = get_policy_class(train_config.policy.type)
-    policy = policy_cls.from_pretrained(pretrained_path)
+    
+    if steps is not None:
+        policy_config = PreTrainedConfig.from_pretrained(pretrained_path)
+        # Check if the number of steps make sense 
+        horizon=policy_config.horizon
+        if steps >= horizon: 
+            raise ValueError(
+            f"The policy steps={steps} must be smaller than the horizon={horizon}. "
+            "Please modify your cli."
+        )
+        obs=policy_config.n_obs_steps
+        if steps <= obs: 
+            raise ValueError(
+            f"The policy must give out steps={steps} bigger than the observation horizon={obs}. "
+            "Please modify your cli."
+        )
+        policy_config.n_action_steps = int(steps)
+         # Overwrite to load the new model with the modified config file
+        policy = policy_cls.from_pretrained(pretrained_path,config=policy_config)
+
+    else: 
+        policy = policy_cls.from_pretrained(pretrained_path)
 
     logging.info(
         f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
@@ -137,90 +163,67 @@ def inference_worker(
     policy.reset()
     policy.to(device).eval()
 
-    warmup_obs = {"observation.state": torch.zeros((1, 7), device=device), "task": ""}
-    for cam in env.cameras:
-        if cam.config.resolution is None:
-            raise ValueError(
-                f"Camera {cam.config.camera_name} does not have a resolution set. "
-                "Please set the resolution in the camera configuration."
-            )
-        warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
-            (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
-        )
+    # Read policy config to know obs/action window sizes
+    cfg = policy.config
+    n_obs = int(cfg.n_obs_steps)
+    print("Ready to recive information")
 
-    with torch.inference_mode():
-        _ = policy.select_action(warmup_obs)
-        torch.cuda.synchronize()
-
-    logging.info("[Inference] Warm-up complete")
+    # Set up the policy to consider inpainting. This requires updating the default policies 
+    if inpainting:
+        # How much to reuse the steps from a previous prediction 
+        policy.inpainting = int(replan_time)
 
     while True:
-        obs_raw = conn.recv()
-        if obs_raw is None:
+        # Check if messages are recieved correctly
+        msg = conn.recv()
+        if msg is None:
             break
-        if obs_raw == "reset":
+        if msg == "reset":
             logging.info("[Inference] Resetting policy")
             policy.reset()
             continue
+        if not (isinstance(msg, dict) and msg.get("type") == "OBS_SEQ"):
+            logging.warning(f"[Inference] Unknown message: {type(msg)}")
+            continue
+        
+        # We are recieving a list of dictonaries with the last observations 
+        obs_seq = msg["obs_seq"]
 
+        # Make the policy predict an action chunk for the current obeservation.
+        # Therefore we follow the implementation on the Lerobot side for select_action() which calls predict_action_chunk()
         with torch.inference_mode():
-            state = np.concatenate([obs_raw["cartesian"][:6], obs_raw["gripper"]])
-            obs = {
-                "observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float(),
-                "task": "",  # TODO: Add task description if needed
-            }
-            for cam in env.cameras:
-                img = obs_raw[f"{cam.config.camera_name}_image"]
-                obs[f"observation.images.{cam.config.camera_name}"] = (
-                    torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).cuda().float() / 255
-                )
+            for i in range(n_obs):
+                last= obs_seq[i]
+                state = np.concatenate([last["cartesian"][:6], last["gripper"]])
+                batch = {
+                    "observation.state": torch.from_numpy(state)
+                        .unsqueeze(0)
+                        .to(device=device, dtype=torch.float32),
+                    "task": "", # TODO: Add task description if needed
+                }
+                for cam in env.cameras:
+                    img = last[f"{cam.config.camera_name}_image"]
+                    batch[f"observation.images.{cam.config.camera_name}"] = (
+                        torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=torch.float32)/ 255
+                    )
 
-            action = policy.select_action(obs)
+                # This mirrors Lerobot `select_action()` pre-processing so queues are filled correctly
+                batch_norm = policy.normalize_inputs(batch)
+                if policy.config.image_features:
+                    batch_norm = dict(batch_norm) # shallow copy then add OBS_IMAGES stack
+                    batch_norm[OBS_IMAGES] = torch.stack(
+                        [batch_norm[k] for k in policy.config.image_features], dim=-4
+                    )
+                # Note: It's important that this happens after stacking the images into a single key.
+                policy._queues = populate_queues(policy._queues, batch_norm)
 
-        logging.debug(f"[Inference] Computed action: {action}")
-        conn.send(action)
+            # Now get a fresh chunk
+            chunk = policy.predict_action_chunk(batch_norm)  
+            chunk = chunk.squeeze(0).to(device="cpu").numpy()
+
+        logging.debug(f"[Inference] Computed chunk with shape {tuple(chunk.shape)}")
+        conn.send(chunk)
 
     conn.close()
     logging.info("[Inference] Worker shutting down")
 
-
-def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable:
-    """Create a function to apply a policy in the environment using multiprocessing.
-
-    This function returns a Callable that, when invoked, observes the current state
-    of the environment, sends the observation to the inference worker via pipe,
-    receives the action, and steps the environment with that action.
-
-    Args:
-        env (ManipulatorBaseEnv): The environment in which the policy will be applied.
-        parent_conn (Connection): The connection to the inference worker for sending observations
-
-    Returns:
-        Callable: A function that, when called, performs a step in the environment
-        using the policy and returns the observation and action taken.
-    """
-
-    def _fn() -> tuple:
-        """Function to apply the policy in the environment.
-
-        This function observes the current state of the environment, sends the observation
-        to the inference worker, receives the action, and steps the environment.
-
-        Returns:
-            tuple: A tuple containing the observation from the environment and the action taken.
-        """
-        obs_raw = env._get_obs()
-
-        # Send observation to inference worker and receive action
-        parent_conn.send(obs_raw)
-        action = parent_conn.recv().squeeze(0).to("cpu").numpy()
-        logging.debug(f"Action: {action}")
-
-        try:
-            env.step(action, block=False)
-        except Exception as e:
-            logging.error(f"Error during environment step: {e}")
-
-        return obs_raw, action
-
-    return _fn
