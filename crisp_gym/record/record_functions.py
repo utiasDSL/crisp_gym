@@ -9,7 +9,6 @@ import logging
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
-from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
 import torch
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
@@ -20,9 +19,9 @@ from crisp_gym.util.lerobot_features import numpy_obs_to_torch
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
-    from crisp_gym.manipulator_env import ManipulatorBaseEnv
-    from crisp_gym.manipulator_env import ManipulatorCartesianEnv
+    from crisp_gym.manipulator_env import ManipulatorBaseEnv, ManipulatorCartesianEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
+    from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
 
 
 def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamedPose) -> Callable:

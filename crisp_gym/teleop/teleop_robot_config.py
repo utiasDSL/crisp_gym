@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Dict
 
 import yaml
@@ -13,8 +14,6 @@ from crisp_py.robot_config import FrankaConfig, make_robot_config
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from crisp_py.robot import RobotConfig
 
 
