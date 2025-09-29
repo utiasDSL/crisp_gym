@@ -15,13 +15,14 @@ import rclpy
 # TODO: make this optional, we do not want to depend on lerobot
 from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
 from rich import print
 from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
+
+from crisp_gym.util.lerobot_features import concatenate_state_features
 
 logger = logging.getLogger(__name__)
 
@@ -170,10 +171,11 @@ class RecordingManager(ABC):
                             else:
                                 frame[feature_name] = value
 
-                    logger.debug(f"Final frame keys: {list(frame.keys())}")
+                    # Concatenate state vector
+                    frame["observation.state"] = concatenate_state_features(obs, self.features)
+
+                    logger.debug(f"Constructed frame with keys: {frame.keys()}")
                     dataset.add_frame(frame, task=task)
-                    buffer_size = len(getattr(dataset, "_episode_buffer", []))
-                    logger.debug(f"Frame added to dataset. Buffer now has {buffer_size} frames.")
 
                 elif mtype == "SAVE_EPISODE":
                     if self.use_sound:
@@ -239,7 +241,7 @@ class RecordingManager(ABC):
                     logger.info("Shutting down writer process.")
                     break
             except Exception as e:
-                logger.debug("Error occured: ", e)
+                logger.exception("Error occured: ", e)
             finally:
                 pass
 

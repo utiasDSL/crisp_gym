@@ -177,9 +177,10 @@ try:
         leader = make_leader(args.leader_config, namespace=args.leader_namespace)
         leader.wait_until_ready()
         leader.config.leader.home_config = home_close_to_table
+        leader.config.leader.time_to_home = 2.0
 
     keys_to_ignore = []
-    keys_to_ignore += ["observation.state.joint", "observation.state.target"]
+    # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
     features = get_features(env=env, ignore_keys=keys_to_ignore)
     logger.debug(f"Using the features: {features}")
 
@@ -206,6 +207,7 @@ try:
     if isinstance(leader, TeleopRobot):
         leader.prepare_for_teleop()
     env.robot.config.home_config = home_close_to_table
+    env.robot.config.time_to_home = 2.0
     env.home()
     env.reset()
 

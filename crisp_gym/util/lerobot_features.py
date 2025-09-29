@@ -105,14 +105,15 @@ def get_features(
             continue  # Task features are handled separately
 
         elif feature_key.startswith("observation.images."):
-            features[feature_key] = {
-                "dtype": "image",
-                "shape": env.observation_space[feature_key].shape,
-                "names": ["height", "width", "channels"],
-            }
-            if use_video:
+            if not use_video:
+                features[feature_key] = {
+                    "dtype": "image",
+                    "shape": env.observation_space[feature_key].shape,
+                    "names": ["height", "width", "channels"],
+                }
+            else:
                 original_feature_key = feature_key
-                feature_key = feature_key.replace("images", "video")
+                # feature_key = feature_key.replace("images", "video")
                 features[feature_key] = {
                     "dtype": "video",
                     "shape": env.observation_space[original_feature_key].shape,
@@ -137,12 +138,9 @@ def get_features(
             "For now, they only support images with the same resolution. "
             "Please ensure all images have the same resolution."
         )
-    # Combined state feature
-    features["observation.state"] = {
-        "dtype": "float32",
-        "shape": (int(state_feature_length),),
-        "names": state_feature_names,
-    }
+    features["observation.state"] = construct_state_feature(
+        state_feature_length, state_feature_names
+    )
 
     # Action
     features["action"] = {
@@ -152,6 +150,65 @@ def get_features(
     }
 
     return features
+
+
+def construct_state_feature(length: int, names: list[str]) -> Dict[str, Any]:
+    """Construct the state feature dictionary.
+
+    Args:
+        length (int): Length of the state feature vector.
+        names (list[str]): List of names for each dimension of the state feature.
+
+    Returns:
+        Dict[str, Any]: State feature dictionary.
+    """
+    return {
+        "dtype": "float32",
+        "shape": (length,),
+        "names": names,
+    }
+
+
+def concatenate_state_features(obs: Dict[str, Any], features: Dict[str, Dict]) -> np.ndarray:
+    """Concatenate individual state features into a single state vector.
+
+    This function takes the individual state components from the observation dictionary
+    and concatenates them into a single numpy array representing the full state.
+
+    Args:
+        obs (Dict[str, Any]): Observation dictionary containing individual state components.
+        features (Dict[str, Dict]): Feature configuration dictionary.
+
+    Returns:
+        np.ndarray: Concatenated state vector.
+    """
+    state_components = []
+
+    for feature_name in features:
+        if not feature_name.startswith("observation.state"):
+            continue
+
+        if feature_name == "observation.state":
+            continue  # Skip the combined state feature
+
+        if feature_name in obs:
+            value = obs[feature_name]
+            if isinstance(value, np.ndarray):
+                state_components.append(value.astype(np.float32))
+            else:
+                state_components.append(np.array(value, dtype=np.float32))
+        else:
+            raise ValueError(f"Missing required state component: {feature_name}")
+
+    concatenated_state = np.concatenate(state_components, axis=0)
+    expected_length = features["observation.state"]["shape"][0]
+
+    if concatenated_state.shape[0] != expected_length:
+        raise ValueError(
+            f"Concatenated state length {concatenated_state.shape[0]} does not match expected length {expected_length}."
+        )
+
+    return concatenated_state
 
 
 def convert_observation_to_features(
