@@ -57,7 +57,7 @@ class TeleopStreamedPose:
         """
         if self._last_pose is None:
             raise RuntimeError(
-                "No pose received yet. Is the teleop device running? Check with 'ros2 topic echo {"
+                f"No pose received yet. Is the teleop device running? Check with 'ros2 topic echo {self._pose_topic}'"
             )
         return self._last_pose
 
