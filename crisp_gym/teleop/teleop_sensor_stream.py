@@ -27,7 +27,7 @@ class TeleopStreamedPose:
         self._last_gripper: float | None = None
 
         # Set this with config
-        self._griper_topic = f"/{self._prefix}phone_gripper"
+        self._gripper_topic = f"/{self._prefix}phone_gripper"
         self._pose_topic = f"/{self._prefix}phone_pose"
 
         self.node.create_subscription(
