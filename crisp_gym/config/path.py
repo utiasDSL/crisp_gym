@@ -4,7 +4,7 @@ import os
 import warnings
 from importlib.resources import files
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 CRISP_CONFIG_PATH_STR = os.environ.get("CRISP_CONFIG_PATH")
 CRISP_CONFIG_PATHS: List[Path] = []

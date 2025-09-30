@@ -27,7 +27,7 @@ class TeleopStreamedPose:
         self._last_gripper: float | None = None
 
         # Set this with config
-        self._griper_topic = f"/{self._prefix}phone_gripper"
+        self._gripper_topic = f"/{self._prefix}phone_gripper"
         self._pose_topic = f"/{self._prefix}phone_pose"
 
         self.node.create_subscription(
@@ -57,7 +57,7 @@ class TeleopStreamedPose:
         """
         if self._last_pose is None:
             raise RuntimeError(
-                "No pose received yet. Is the teleop device running? Check with 'ros2 topic echo {"
+                f"No pose received yet. Is the teleop device running? Check with 'ros2 topic echo {self._pose_topic}'"
             )
         return self._last_pose
 

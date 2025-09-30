@@ -7,6 +7,7 @@ import numpy as np
 import rclpy  # noqa: F401
 
 import crisp_gym  # noqa: F401
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.config.path import CRISP_CONFIG_PATH
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
 from crisp_gym.manipulator_env_config import list_env_configs
@@ -175,8 +176,12 @@ try:
     else:
         leader = make_leader(args.leader_config, namespace=args.leader_namespace)
         leader.wait_until_ready()
+        leader.config.leader.home_config = home_close_to_table
+        leader.config.leader.time_to_home = 2.0
 
-    features = get_features(env=env)
+    keys_to_ignore = []
+    # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
+    features = get_features(env=env, ignore_keys=keys_to_ignore)
     logger.debug(f"Using the features: {features}")
 
     if args.use_streamed_teleop and ctrl_type != "cartesian":
@@ -201,6 +206,8 @@ try:
     # Prepare environment and leader
     if isinstance(leader, TeleopRobot):
         leader.prepare_for_teleop()
+    env.robot.config.home_config = home_close_to_table
+    env.robot.config.time_to_home = 2.0
     env.home()
     env.reset()
 
@@ -208,6 +215,7 @@ try:
 
     def on_start():
         """Hook function to be called when starting a new episode."""
+        env.robot.reset_targets()
         env.reset()
 
         # TODO: @danielsanjosepro: ask user for which controller to use.
@@ -232,21 +240,24 @@ try:
             leader.robot.reset_targets()
             leader.robot.home(blocking=False)
 
-    teleop_fn = None
-    if isinstance(leader, TeleopRobot):
-        teleop_fn = make_teleop_fn(env, leader)
-    elif isinstance(leader, TeleopStreamedPose) and isinstance(env, ManipulatorCartesianEnv):
-        teleop_fn = make_teleop_streamer_fn(env, leader)
-    else:
-        raise ValueError(
-            "Streamed teleop is only compatible with Cartesian control. Please disable joint control."
-        )
-
     with recording_manager:
         while not recording_manager.done():
             logger.info(
                 f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
             )
+
+            # Create a new teleop function for each episode to reset internal variables
+            teleop_fn = None
+            if isinstance(leader, TeleopRobot):
+                teleop_fn = make_teleop_fn(env, leader)
+            elif isinstance(leader, TeleopStreamedPose) and isinstance(
+                env, ManipulatorCartesianEnv
+            ):
+                teleop_fn = make_teleop_streamer_fn(env, leader)
+            else:
+                raise ValueError(
+                    "Streamed teleop is only compatible with Cartesian control. Please disable joint control."
+                )
 
             task = tasks[np.random.randint(0, len(tasks))] if tasks else "No task specified."
             logger.info(f"▷ Task: {task}")
