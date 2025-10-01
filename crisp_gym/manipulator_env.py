@@ -38,6 +38,7 @@ from crisp_py.sensors.sensor import make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
 
@@ -278,7 +279,7 @@ class ManipulatorBaseEnv(gym.Env):
         """
         if self.config.gripper_enabled:
             self.gripper.open()
-        self.robot.home(home_config=home_config, blocking=blocking)
+        self.robot.home(home_config=home_close_to_table, blocking=blocking)
 
         if not blocking:
             self.switch_to_default_controller()
@@ -333,7 +334,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.ctrl_type = ControlType.CARTESIAN
 
         # TODO: Make this configurable
-        self._min_z_height = 0.05
+        self._min_z_height = 0.04
 
         self.action_space = gym.spaces.Box(
             low=np.concatenate(

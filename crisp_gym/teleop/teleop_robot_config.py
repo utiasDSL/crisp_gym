@@ -59,6 +59,21 @@ class LeftAlohaFrankaTeleopRobotConfig(TeleopRobotConfig):
     leader_namespace: str = "left"
     leader_gripper_namespace: str = "left/trigger"
 
+@dataclass
+class HackedTeleopFrankaTeleopRobotConfig(TeleopRobotConfig):
+    """Configuration for the left robot as a leader."""
+
+    leader: RobotConfig = field(default_factory=lambda: FrankaConfig())
+    leader_gripper: GripperConfig | None = field(
+        default_factory=lambda: GripperConfig(min_value=0.0, max_value=1.0, joint_state_topic="/left/trigger/trigger_state_broadcaster/joint_state")
+    )
+
+    gravity_compensation_controller: Path = field(
+        default_factory=lambda: CRISP_CONFIG_PATH / "control" / "gravity_compensation.yaml"
+    )
+
+    leader_namespace: str = "left"
+    leader_gripper_namespace: str = "left/trigger"
 
 @dataclass
 class RightAlohaFrankaTeleopRobotConfig(TeleopRobotConfig):
@@ -128,4 +143,5 @@ STRING_TO_CONFIG = {
     "no_gripper": NoGripperTeleopRobotConfig,
     "right_no_gripper": RightNoGripperTeleopRobotConfig,
     "left_no_gripper": LeftNoGripperTeleopRobotConfig,
+    "hacked_teleop": HackedTeleopFrankaTeleopRobotConfig
 }
