@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.0.0](https://github.com/utiasDSL/crisp_gym/compare/v2.0.3...v3.0.0) (2025-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* New observation state variable including all states in one
+
+### Features
+
+* add streamed teleop to script ([466fa42](https://github.com/utiasDSL/crisp_gym/commit/466fa42a5224d2a51ff6220f3c2baca01b9b1c5f))
+* New observation state variable including all states in one ([bd94e29](https://github.com/utiasDSL/crisp_gym/commit/bd94e297d332652ea3d75894cbce2e4cfa0b9663))
+
 ## [2.0.3](https://github.com/utiasDSL/crisp_gym/compare/v2.0.2...v2.0.3) (2025-08-22)
 
 

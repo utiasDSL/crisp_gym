@@ -22,6 +22,8 @@ from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
+from crisp_gym.util.lerobot_features import concatenate_state_features
+
 logger = logging.getLogger(__name__)
 
 
@@ -140,16 +142,7 @@ class RecordingManager(ABC):
         logger.info("Starting dataset writer process.")
         dataset = self._create_dataset()
         self.dataset_ready.set()
-        camera_names = [
-            name.split(".")[-1] for name in self.features if name.startswith("observation.images.")
-        ]
-        sensor_names = [
-            name.split(".")[-1]
-            for name in self.features
-            if name.startswith("observation.state.sensor_")
-        ]
-        logger.debug(f"Camera names: {camera_names}")
-        logger.debug(f"Sensor names: {sensor_names}")
+        logger.debug(f"Dataset features: {list(self.features.keys())}")
 
         while True:
             msg = self.queue.get()
@@ -162,43 +155,27 @@ class RecordingManager(ABC):
 
                     logger.debug(f"Received frame with action: {action} and obs: {obs.keys()}")
 
-                    # TODO: Create directly the proper dataset frame format inside of the environment
-                    frame = {
-                        "observation.state": np.hstack(
-                            [
-                                obs["cartesian"],
-                                obs["gripper"],
-                            ]
-                        ).astype(np.float32),
-                        "action": action.astype(np.float32),
-                    }
-                    joints_frame = {
-                        "observation.state.joint": obs["joint"].astype(np.float32),
-                    }
-                    cam_frame = {
-                        f"observation.images.{camera_name}": obs[f"{camera_name}_image"]
-                        for camera_name in camera_names
-                    }
-                    sensor_frame = {
-                        f"observation.state.{sensor_name}": obs[sensor_name].astype(np.float32)
-                        for sensor_name in sensor_names
-                    }
+                    # Build frame directly from observation using feature-based approach
+                    frame = {"action": action.astype(np.float32)}
 
-                    logger.debug(f"Obs/Action frame: {frame}")
-                    logger.debug(f"Camera frame: {cam_frame}")
-                    logger.debug(f"Joints frame: {joints_frame}")
-                    logger.debug(f"Sensor frame: {sensor_frame}")
+                    # Add all observation features that match our dataset features
+                    for feature_name in self.features:
+                        if feature_name == "action":
+                            continue  # Already added above
+                        if feature_name in obs:
+                            value = obs[feature_name]
+                            if isinstance(value, np.ndarray) and feature_name.startswith(
+                                "observation.state"
+                            ):
+                                frame[feature_name] = value.astype(np.float32)
+                            else:
+                                frame[feature_name] = value
 
-                    frame = {
-                        **frame,
-                        **joints_frame,
-                        **cam_frame,
-                        **sensor_frame,
-                    }
+                    # Concatenate state vector
+                    frame["observation.state"] = concatenate_state_features(obs, self.features)
 
+                    logger.debug(f"Constructed frame with keys: {frame.keys()}")
                     dataset.add_frame(frame, task=task)
-                    buffer_size = len(getattr(dataset, "_episode_buffer", []))
-                    logger.debug(f"Frame added to dataset. Buffer now has {buffer_size} frames.")
 
                 elif mtype == "SAVE_EPISODE":
                     if self.use_sound:
@@ -264,7 +241,7 @@ class RecordingManager(ABC):
                     logger.info("Shutting down writer process.")
                     break
             except Exception as e:
-                logger.debug("Error occured: ", e)
+                logger.exception("Error occured: ", e)
             finally:
                 pass
 

@@ -37,6 +37,7 @@ from crisp_py.robot import Pose, Robot
 from crisp_py.sensors.sensor import make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
+from typing_extensions import override
 
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
@@ -93,15 +94,83 @@ class ManipulatorBaseEnv(gym.Env):
         self.ctrl_type = ControlType.UNDEFINED
 
         logger.debug(f"ManipulatorBaseEnv initialized with config: {self.config}")
-        logger.debug("Waiting for robot, gripper, cameras, and sensors to be ready...")
-        self.robot.wait_until_ready(timeout=3)
-        if self.config.gripper_enabled:
-            self.gripper.wait_until_ready(timeout=3)
-        for camera in self.cameras:
-            camera.wait_until_ready(timeout=3)
-        for sensor in self.sensors:
-            sensor.wait_until_ready(timeout=3)
-        logger.debug("*Robot, gripper, cameras, and sensors are ready.*")
+
+        self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
+
+        if any(camera.config.resolution is None for camera in self.cameras):
+            raise ValueError(
+                "All cameras must have a resolution defined in the configuration file."
+            )
+
+        self.observation_space = gym.spaces.Dict(
+            {
+                **{
+                    f"observation.images.{camera.config.camera_name}": gym.spaces.Box(
+                        low=np.zeros((*camera.config.resolution, 3), dtype=np.uint8),
+                        high=255 * np.ones((*camera.config.resolution, 3), dtype=np.uint8),
+                        dtype=np.uint8,
+                    )
+                    for camera in self.cameras
+                    if camera.config.resolution is not None
+                },
+                # Combined state: cartesian pose (6D)
+                "observation.state.cartesian": gym.spaces.Box(
+                    low=np.concatenate(
+                        [
+                            -np.ones((6,), dtype=np.float32),  # cartesian pose
+                        ]
+                    ),
+                    high=np.concatenate(
+                        [
+                            np.ones((6,), dtype=np.float32),  # cartesian pose
+                        ]
+                    ),
+                    dtype=np.float32,
+                ),
+                # Gripper state
+                "observation.state.gripper": gym.spaces.Box(
+                    low=np.array([0.0], dtype=np.float32),  # Gripper closed
+                    high=np.array([1.0], dtype=np.float32),  # Gripper open
+                    dtype=np.float32,
+                ),
+                # Joint state
+                "observation.state.joint": gym.spaces.Box(
+                    low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
+                    * -np.pi,
+                    high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
+                    * np.pi,
+                    dtype=np.float32,
+                ),
+                # Task description
+                "task": gym.spaces.Text(max_length=256),
+                # Sensor data
+                **{
+                    f"observation.state.sensor_{sensor.config.name}": gym.spaces.Box(
+                        low=-np.inf * np.ones(sensor.config.shape, dtype=np.float32),
+                        high=np.inf * np.ones(sensor.config.shape, dtype=np.float32),
+                        dtype=np.float32,
+                    )
+                    for sensor in self.sensors
+                    if hasattr(sensor, "config") and hasattr(sensor.config, "shape")
+                },
+            }
+        )
+        self._uninitialized = True
+
+    def initialize(self, force: bool = False):
+        """Initialize the environment.
+
+        Args:
+            force (bool): If True, force re-initialization even if already initialized.
+
+        Raises:
+            FileNotFoundError: If the cartesian or joint control parameter config file does not exist.
+        """
+        if not self._uninitialized and not force:
+            logger.debug("Environment is already initialized.")
+            return
+
+        self.wait_until_ready()
 
         if self.config.cartesian_control_param_config:
             if not os.path.exists(self.config.cartesian_control_param_config):
@@ -120,71 +189,72 @@ class ManipulatorBaseEnv(gym.Env):
                 file_path=self.config.joint_control_param_config
             )
 
-        self.control_rate = self.robot.node.create_rate(self.config.control_frequency)
+    def wait_until_ready(self):
+        """Wait until the robot, gripper, cameras, and sensors are ready."""
+        logger.debug("Waiting for robot, gripper, cameras, and sensors to be ready...")
 
-        if any(camera.config.resolution is None for camera in self.cameras):
-            raise ValueError(
-                "All cameras must have a resolution defined in the configuration file."
-            )
+        self.robot.wait_until_ready(timeout=3)
 
-        self.observation_space = gym.spaces.Dict(
-            {
-                **{
-                    f"{camera.config.camera_name}_image": gym.spaces.Box(
-                        low=np.zeros((*camera.config.resolution, 3), dtype=np.uint8),
-                        high=255 * np.ones((*camera.config.resolution, 3), dtype=np.uint8),
-                        dtype=np.uint8,
-                    )
-                    for camera in self.cameras
-                    if camera.config.resolution is not None
-                },
-                "joint": gym.spaces.Box(
-                    low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
-                    * -np.pi,
-                    high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
-                    * np.pi,
-                    dtype=np.float32,
-                ),
-                "cartesian": gym.spaces.Box(
-                    low=-np.ones((6,), dtype=np.float32),
-                    high=np.ones((6,), dtype=np.float32),
-                    dtype=np.float32,
-                ),
-                "gripper": gym.spaces.Box(
-                    low=np.zeros((1,), dtype=np.float32),
-                    high=np.ones((1,), dtype=np.float32),
-                    dtype=np.float32,
-                ),
-            }
-        )
+        if self.config.gripper_enabled:
+            self.gripper.wait_until_ready(timeout=3)
+
+        for camera in self.cameras:
+            camera.wait_until_ready(timeout=3)
+
+        for sensor in self.sensors:
+            sensor.wait_until_ready(timeout=3)
+
+        logger.debug("*Robot, gripper, cameras, and sensors are ready.*")
+
+    def get_obs(self) -> dict:
+        """Retrieve the current observation from the robot in LeRobot format and allow backward compatibility."""
+        return self._get_obs()
 
     def _get_obs(self) -> dict:
-        """Retrieve the current observation from the robot.
+        """Retrieve the current observation from the robot in LeRobot format.
 
         Returns:
-            dict: A dictionary containing the current sensor and state information, including:
-                - '{camera_name}_image': RGB image from each configured camera.
-                - 'joint': Current joint configuration of the robot in radians.
-                - 'cartesian': End-effector pose as a 6D vector (position [xyz] + orientation in Euler angles [xyz], in radians).
-                - 'gripper': Normalized gripper state (0 = fully open, 1 = fully closed).
+            dict: A dictionary containing the current sensor and state information in LeRobot format:
+                - 'observation.images.{camera_name}': RGB image from each configured camera.
+                - 'observation.state': Combined state vector (cartesian pose + gripper).
+                - 'observation.state.joint': Current joint configuration of the robot in radians.
+                - 'observation.state.sensor_{sensor_name}': Sensor values.
+                - 'task': Task description (empty string for now).
         """
         obs = {}
-        obs["joint"] = self.robot.joint_values
+
+        # TODO: Task description
+        obs["task"] = ""
+
         # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
-        obs["cartesian"] = np.concatenate(
+        cartesian_pose = np.concatenate(
             (
                 self.robot.end_effector_pose.position,
                 self.robot.end_effector_pose.orientation.as_euler("xyz"),
             ),
             axis=0,
         )
-        obs["gripper"] = (
+        gripper_value = (
             1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
         )
+
+        # Cartesian pose
+        obs["observation.state.cartesian"] = cartesian_pose.astype(np.float32)
+
+        # Gripper state
+        obs["observation.state.gripper"] = gripper_value.astype(np.float32)
+
+        # Joint state
+        obs["observation.state.joint"] = self.robot.joint_values
+
+        # Camera images
         for camera in self.cameras:
-            obs[f"{camera.config.camera_name}_image"] = camera.current_image
+            obs[f"observation.images.{camera.config.camera_name}"] = camera.current_image
+
+        # Sensor data
         for sensor in self.sensors:
-            obs[f"sensor_{sensor.config.name}"] = sensor.value
+            obs[f"observation.state.sensor_{sensor.config.name}"] = sensor.value
+
         return obs
 
     def _set_gripper_action(self, action: float):
@@ -209,6 +279,7 @@ class ManipulatorBaseEnv(gym.Env):
             ):
                 self.gripper.open()
 
+    @override
     def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment.
 
@@ -230,6 +301,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
+    @override
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> Tuple[dict, dict]:
@@ -238,12 +310,15 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.timestep = 0
 
+        self.initialize()
+
         self.robot.reset_targets()
         self.robot.wait_until_ready()
         self.switch_to_default_controller()
 
         return self._get_obs(), {}
 
+    @override
     def close(self):
         """Close the environment."""
         self.robot.shutdown()
@@ -335,6 +410,16 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         # TODO: Make this configurable
         self._min_z_height = 0.0
 
+        self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+            {
+                **self.observation_space.spaces,
+                "observation.state.target": gym.spaces.Box(
+                    low=np.ones((6,), dtype=np.float32) * -np.pi,
+                    high=np.ones((6,), dtype=np.float32) * np.pi,
+                    dtype=np.float32,
+                ),
+            },
+        )
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
                 [
@@ -355,8 +440,20 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             dtype=np.float32,
         )
 
-        self.switch_to_default_controller()
+    @override
+    def _get_obs(self) -> dict:
+        obs = super()._get_obs()
+        # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
+        obs["observation.state.target"] = np.concatenate(
+            (
+                self.robot.target_pose.position,
+                self.robot.target_pose.orientation.as_euler("xyz"),
+            ),
+            axis=0,
+        )
+        return obs
 
+    @override
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
 
@@ -412,6 +509,19 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.ctrl_type = ControlType.JOINT
 
         self.num_joints = self.config.robot_config.num_joints()
+
+        # We add the target to the observation space to allow the agent to learn the target joint positions.
+        self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+            {
+                **self.observation_space.spaces,
+                "observation.state.target": gym.spaces.Box(
+                    low=np.ones((self.num_joints,), dtype=np.float32) * -np.pi,
+                    high=np.ones((self.num_joints,), dtype=np.float32) * np.pi,
+                    dtype=np.float32,
+                ),
+            },
+        )
+
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
                 [
@@ -430,8 +540,13 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             dtype=np.float32,
         )
 
-        self.switch_to_default_controller()
+    @override
+    def _get_obs(self) -> dict:
+        obs = super()._get_obs()
+        obs["observation.state.target"] = self.robot.target_joint
+        return obs
 
+    @override
     def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
 

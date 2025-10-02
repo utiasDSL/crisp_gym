@@ -14,12 +14,60 @@ from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 
 from crisp_gym.util.control_type import ControlType
+from crisp_gym.util.lerobot_features import numpy_obs_to_torch
 
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection
 
-    from crisp_gym.manipulator_env import ManipulatorBaseEnv
+    from crisp_gym.manipulator_env import ManipulatorBaseEnv, ManipulatorCartesianEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
+    from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
+
+
+def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamedPose) -> Callable:
+    """Create a teleoperation function for the leader robot using streamed pose data."""
+    prev_pose = leader.last_pose
+    first_step = True
+
+    def _fn() -> tuple:
+        """Teleoperation function to be called in each step.
+
+        This function computes the action based on the current end-effector pose
+        or joint values of the leader robot, updates the gripper value, and steps
+        the environment.
+
+        Returns:
+            tuple: A tuple containing the observation from the environment and the action taken.
+        """
+        nonlocal prev_pose, first_step
+        if first_step:
+            first_step = False
+            prev_pose = leader.last_pose
+            return None, None
+
+        pose = leader.last_pose
+        action_pose = pose - prev_pose
+        prev_pose = pose
+
+        if env.gripper.value is None:
+            gripper = 0.0
+        else:
+            gripper = env.gripper.value + np.clip(
+                leader.last_gripper - env.gripper.value,
+                -env.gripper.config.max_delta,
+                env.gripper.config.max_delta,
+            )
+
+        action = np.concatenate(
+            [
+                list(action_pose.position) + list(action_pose.orientation.as_euler("xyz")),
+                [gripper],
+            ]
+        )
+        obs, *_ = env.step(action, block=False)
+        return obs, action
+
+    return _fn
 
 
 def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
@@ -66,14 +114,10 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
         prev_pose = pose
         prev_joint = joint
 
-        if leader.gripper is None:
+        if leader.gripper is None or leader.gripper.value is None:
             gripper = 0.0
-        elif env.gripper is None:
-            gripper = leader.gripper.value + np.clip(
-                leader.gripper.value - leader.gripper.value,
-                -leader.gripper.config.max_delta,
-                leader.gripper.config.max_delta,
-            )
+        elif env.gripper.value is None:
+            gripper = 0.0
         else:
             gripper = env.gripper.value + np.clip(
                 leader.gripper.value - env.gripper.value,
@@ -137,16 +181,8 @@ def inference_worker(
     policy.reset()
     policy.to(device).eval()
 
-    warmup_obs = {"observation.state": torch.zeros((1, 7), device=device), "task": ""}
-    for cam in env.cameras:
-        if cam.config.resolution is None:
-            raise ValueError(
-                f"Camera {cam.config.camera_name} does not have a resolution set. "
-                "Please set the resolution in the camera configuration."
-            )
-        warmup_obs[f"observation.images.{cam.config.camera_name}"] = torch.zeros(
-            (1, 3, *cam.config.resolution), device=device, dtype=torch.float32
-        )
+    warmup_obs_raw = env.observation_space.sample()
+    warmup_obs = numpy_obs_to_torch(warmup_obs_raw)
 
     with torch.inference_mode():
         _ = policy.select_action(warmup_obs)
@@ -164,17 +200,7 @@ def inference_worker(
             continue
 
         with torch.inference_mode():
-            state = np.concatenate([obs_raw["cartesian"][:6], obs_raw["gripper"]])
-            obs = {
-                "observation.state": torch.from_numpy(state).unsqueeze(0).cuda().float(),
-                "task": "",  # TODO: Add task description if needed
-            }
-            for cam in env.cameras:
-                img = obs_raw[f"{cam.config.camera_name}_image"]
-                obs[f"observation.images.{cam.config.camera_name}"] = (
-                    torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).cuda().float() / 255
-                )
-
+            obs = numpy_obs_to_torch(obs_raw)
             action = policy.select_action(obs)
 
         logging.debug(f"[Inference] Computed action: {action}")
@@ -209,7 +235,7 @@ def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable
         Returns:
             tuple: A tuple containing the observation from the environment and the action taken.
         """
-        obs_raw = env._get_obs()
+        obs_raw = env.get_obs()
 
         # Send observation to inference worker and receive action
         parent_conn.send(obs_raw)
@@ -219,7 +245,7 @@ def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable
         try:
             env.step(action, block=False)
         except Exception as e:
-            logging.error(f"Error during environment step: {e}")
+            logging.exception(f"Error during environment step: {e}")
 
         return obs_raw, action
 

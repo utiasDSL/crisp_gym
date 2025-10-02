@@ -2,6 +2,8 @@
 
 import logging
 
+logger = logging.getLogger(__name__)
+
 
 def prompt(
     message: str = "Choose an option:",
@@ -18,14 +20,14 @@ def prompt(
     Returns:
         str: The selected or entered string.
     """
-    logging.info("-" * 40)
+    logger.info("-" * 40)
     if options:
-        logging.info(message)
+        logger.info(message)
         for i, option in enumerate(options, 1):
-            logging.info(f"{i}. {option}")
+            logger.info(f"{i}. {option}")
         if default:
-            logging.info(f"(Default: {default})")
-        logging.info("-" * 40)
+            logger.info(f"(Default: {default})")
+        logger.info("-" * 40)
 
         while True:
             choice = input("Enter number, text, or press Enter for default: ").strip()
@@ -33,28 +35,28 @@ def prompt(
                 if default:
                     return default
                 else:
-                    logging.info("No input given and no default set. Try again.")
+                    logger.info("No input given and no default set. Try again.")
                     continue
             if choice.isdigit():
                 index = int(choice) - 1
                 if 0 <= index < len(options):
                     return options[index]
                 else:
-                    logging.info("Invalid number. Try again.")
+                    logger.info("Invalid number. Try again.")
             elif choice in options:
                 return choice
             else:
-                logging.info("Invalid input. Try again.")
+                logger.info("Invalid input. Try again.")
     else:
         while True:
             if default is not None:
                 message += f" (Default: '{default}')"
-            logging.info(message)
-            logging.info("-" * 40)
+            logger.info(message)
+            logger.info("-" * 40)
             response = input("Enter string or press Enter for default: ").strip()
             if response:
                 return response
             elif default is not None:
                 return default
             else:
-                logging.info("No input given and no default set. Try again.")
+                logger.info("No input given and no default set. Try again.")

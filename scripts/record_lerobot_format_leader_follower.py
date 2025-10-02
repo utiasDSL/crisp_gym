@@ -7,13 +7,15 @@ import numpy as np
 import rclpy  # noqa: F401
 
 import crisp_gym  # noqa: F401
+from crisp_gym.config.home import home_close_to_table
 from crisp_gym.config.path import CRISP_CONFIG_PATH
-from crisp_gym.manipulator_env import make_env
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
 from crisp_gym.manipulator_env_config import list_env_configs
-from crisp_gym.record.record_functions import make_teleop_fn
+from crisp_gym.record.record_functions import make_teleop_fn, make_teleop_streamer_fn
 from crisp_gym.record.recording_manager import make_recording_manager
-from crisp_gym.teleop.teleop_robot import make_leader
+from crisp_gym.teleop.teleop_robot import TeleopRobot, make_leader
 from crisp_gym.teleop.teleop_robot_config import list_leader_configs
+from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
@@ -105,6 +107,12 @@ parser.add_argument(
     help="Set the logger level.",
 )
 
+parser.add_argument(
+    "--use-streamed-teleop",
+    action="store_true",
+    help="Whether to use streamed teleop (e.g., from a phone or VR device) for the leader robot.",
+)
+
 args = parser.parse_args()
 
 # Set up logger
@@ -125,14 +133,14 @@ if args.follower_namespace is None:
     )
     logger.info(f"Using follower namespace: {args.follower_namespace}")
 
-if args.leader_namespace is None:
+if args.leader_namespace is None and not args.use_streamed_teleop:
     args.leader_namespace = prompt.prompt(
         "Please enter the leader robot namespace (e.g., 'left', 'right', ...)",
         default="left",
     )
     logger.info(f"Using leader namespace: {args.leader_namespace}")
 
-if args.leader_config is None:
+if args.leader_config is None and not args.use_streamed_teleop:
     leader_configs = list_leader_configs()
     args.leader_config = prompt.prompt(
         "Please enter the leader robot configuration name.",
@@ -161,11 +169,25 @@ try:
         namespace=args.follower_namespace,
     )
 
-    leader = make_leader(args.leader_config, namespace=args.leader_namespace)
-    leader.wait_until_ready()
+    leader: TeleopRobot | TeleopStreamedPose | None = None
+    if args.use_streamed_teleop:
+        leader = TeleopStreamedPose()
+        logger.info("Using streamed teleop for the leader robot.")
+    else:
+        leader = make_leader(args.leader_config, namespace=args.leader_namespace)
+        leader.wait_until_ready()
+        leader.config.leader.home_config = home_close_to_table
+        leader.config.leader.time_to_home = 2.0
 
-    features = get_features(env_config=env.config, ctrl_type=ctrl_type)
+    keys_to_ignore = []
+    # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
+    features = get_features(env=env, ignore_keys=keys_to_ignore)
     logger.debug(f"Using the features: {features}")
+
+    if args.use_streamed_teleop and ctrl_type != "cartesian":
+        raise ValueError(
+            "Streamed teleop is only compatible with Cartesian control. Please disable joint control."
+        )
 
     recording_manager = make_recording_manager(
         recording_manager_type=args.recording_manager_type,
@@ -182,7 +204,10 @@ try:
     logger.info("Homing both robots before starting with recording.")
 
     # Prepare environment and leader
-    leader.prepare_for_teleop()
+    if isinstance(leader, TeleopRobot):
+        leader.prepare_for_teleop()
+    env.robot.config.home_config = home_close_to_table
+    env.robot.config.time_to_home = 2.0
     env.home()
     env.reset()
 
@@ -190,25 +215,30 @@ try:
 
     def on_start():
         """Hook function to be called when starting a new episode."""
+        env.robot.reset_targets()
         env.reset()
 
         # TODO: @danielsanjosepro: ask user for which controller to use.
-        try:
-            leader.robot.controller_switcher_client.switch_controller("torque_feedback_controller")
-        except Exception:
-            leader.robot.cartesian_controller_parameters_client.load_param_config(
-                CRISP_CONFIG_PATH / "control" / "gravity_compensation_on_plane.yaml"
-            )
-            leader.robot.controller_switcher_client.switch_controller(
-                "cartesian_impedance_controller"
-            )
+        if isinstance(leader, TeleopRobot):
+            try:
+                leader.robot.controller_switcher_client.switch_controller(
+                    "torque_feedback_controller"
+                )
+            except Exception:
+                leader.robot.cartesian_controller_parameters_client.load_param_config(
+                    CRISP_CONFIG_PATH / "control" / "gravity_compensation_on_plane.yaml"
+                )
+                leader.robot.controller_switcher_client.switch_controller(
+                    "cartesian_impedance_controller"
+                )
 
     def on_end():
         """Hook function to be called when stopping the recording."""
         env.robot.reset_targets()
         env.robot.home(blocking=False)
-        leader.robot.reset_targets()
-        leader.robot.home(blocking=False)
+        if isinstance(leader, TeleopRobot):
+            leader.robot.reset_targets()
+            leader.robot.home(blocking=False)
 
     with recording_manager:
         while not recording_manager.done():
@@ -216,18 +246,32 @@ try:
                 f"→ Episode {recording_manager.episode_count + 1} / {recording_manager.num_episodes}"
             )
 
+            # Create a new teleop function for each episode to reset internal variables
+            teleop_fn = None
+            if isinstance(leader, TeleopRobot):
+                teleop_fn = make_teleop_fn(env, leader)
+            elif isinstance(leader, TeleopStreamedPose) and isinstance(
+                env, ManipulatorCartesianEnv
+            ):
+                teleop_fn = make_teleop_streamer_fn(env, leader)
+            else:
+                raise ValueError(
+                    "Streamed teleop is only compatible with Cartesian control. Please disable joint control."
+                )
+
             task = tasks[np.random.randint(0, len(tasks))] if tasks else "No task specified."
             logger.info(f"▷ Task: {task}")
 
             recording_manager.record_episode(
-                data_fn=make_teleop_fn(env, leader),
+                data_fn=teleop_fn,
                 task=task,
                 on_start=on_start,
                 on_end=on_end,
             )
 
-    logger.info("Homing leader.")
-    leader.robot.home()
+    if isinstance(leader, TeleopRobot):
+        logger.info("Homing leader.")
+        leader.robot.home()
     logger.info("Homing follower.")
     env.home()
 
