@@ -81,9 +81,15 @@ class RecordingManager(ABC):
         )
         self.writer.start()
 
-    def wait_until_ready(self) -> None:
+    def wait_until_ready(self, timeout: float = 10.0) -> None:
         """Wait until the dataset writer is ready."""
-        self.dataset_ready.wait()
+        while not self.dataset_ready.is_set():
+            logger.debug("Waiting for dataset to be ready...")
+            time.sleep(1.0)
+            timeout -= 1.0
+            if timeout <= 0.0:
+                raise TimeoutError("Timeout waiting for dataset to be ready.")
+
         self.update_episode_count()
 
     def update_episode_count(self) -> None:
