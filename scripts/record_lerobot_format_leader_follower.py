@@ -178,6 +178,7 @@ try:
         leader.wait_until_ready()
         leader.config.leader.home_config = home_close_to_table
         leader.config.leader.time_to_home = 2.0
+        logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
     keys_to_ignore = []
     # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
