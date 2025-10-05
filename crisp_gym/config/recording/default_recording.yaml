@@ -1,0 +1,34 @@
+# Default recording manager configuration
+# This is an example configuration file showing all available parameters
+
+# Dataset configuration
+repo_id: "example_dataset"
+robot_type: "Franka"
+resume: false
+fps: 30
+num_episodes: 3
+push_to_hub: false
+
+# System configuration  
+use_sound: true
+queue_size: 16
+writer_timeout: 10.0
+
+# Features dictionary - this needs to be customized for your specific use case
+# Example features for a typical robot setup:
+features:
+  action: 
+    shape: [7]  # 6 DOF + gripper
+    dtype: "float32"
+  observation.state.cartesian:
+    shape: [6]  # x, y, z, roll, pitch, yaw
+    dtype: "float32"
+  observation.state.gripper:
+    shape: [1]  # gripper position
+    dtype: "float32"
+  observation.state.joint:
+    shape: [7]  # joint positions
+    dtype: "float32"
+  observation.image.primary:
+    shape: [256, 256, 3]  # camera image
+    dtype: "uint8"

@@ -22,6 +22,7 @@ from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
+from crisp_gym.record.recording_manager_config import RecordingManagerConfig
 from crisp_gym.util.lerobot_features import concatenate_state_features
 
 logger = logging.getLogger(__name__)
@@ -32,43 +33,61 @@ class RecordingManager(ABC):
 
     def __init__(
         self,
-        features: dict,
-        repo_id: str,
+        config: RecordingManagerConfig | None = None,
+        # Backwards compatibility - individual parameters
+        features: dict | None = None,
+        repo_id: str | None = None,
         robot_type: str = "Franka",
         resume: bool = False,
         fps: int = 30,
         num_episodes: int = 3,
         push_to_hub: bool = False,
         use_sound: bool = True,
+        queue_size: int = 16,
+        writer_timeout: float = 10.0,
     ) -> None:
         """Initialize the recording manager.
 
         Args:
-            features: The features to record.
-            repo_id: The repository ID for the dataset.
+            config: RecordingManagerConfig instance. If provided, other parameters are ignored.
+            features: The features to record (backwards compatibility).
+            repo_id: The repository ID for the dataset (backwards compatibility).
             robot_type: The type of robot (default is "Franka").
             resume: Whether to resume from an existing dataset (default is False).
             fps: Frames per second for the dataset (default is 30).
             num_episodes: Number of episodes to record (default is 3).
             push_to_hub: Whether to push the dataset to Hugging Face Hub (default is False).
             use_sound: Whether to use sound notifications for episode completion (default is True).
+            queue_size: Size of the multiprocessing queue (default is 16).
+            writer_timeout: Timeout for dataset writer initialization (default is 10.0).
         """
+        # Handle config vs individual parameters
+        if config is not None:
+            self.config = config
+        else:
+            # Backwards compatibility: create config from individual parameters
+            if features is None or repo_id is None:
+                raise ValueError("Either config must be provided, or both features and repo_id must be specified.")
+            self.config = RecordingManagerConfig(
+                features=features,
+                repo_id=repo_id,
+                robot_type=robot_type,
+                resume=resume,
+                fps=fps,
+                num_episodes=num_episodes,
+                push_to_hub=push_to_hub,
+                use_sound=use_sound,
+                queue_size=queue_size,
+                writer_timeout=writer_timeout,
+            )
+            
         self.state: Literal[
             "is_waiting", "recording", "paused", "to_be_saved", "to_be_deleted", "exit"
         ] = "is_waiting"
 
-        self.features = features
-        self.repo_id = repo_id
-        self.robot_type = robot_type
-        self.resume = resume
-        self.fps = fps
-        self.num_episodes = num_episodes
-        self.push_to_hub = push_to_hub
-        self.use_sound = use_sound
         self.episode_count = 0
 
-        # TODO: do not hardcode the queue size, make it configurable
-        self.queue = mp.JoinableQueue(16)
+        self.queue = mp.JoinableQueue(self.config.queue_size)
         self.episode_count_queue = mp.Queue(1)
         self.dataset_ready = mp.Event()
 
@@ -81,14 +100,18 @@ class RecordingManager(ABC):
         )
         self.writer.start()
 
-    def wait_until_ready(self, timeout: float = 10.0) -> None:
+    def wait_until_ready(self, timeout: float | None = None) -> None:
         """Wait until the dataset writer is ready."""
+        if timeout is None:
+            timeout = self.config.writer_timeout
+            
+        original_timeout = timeout
         while not self.dataset_ready.is_set():
             logger.debug("Waiting for dataset to be ready...")
             time.sleep(1.0)
             timeout -= 1.0
             if timeout <= 0.0:
-                raise TimeoutError("Timeout waiting for dataset to be ready.")
+                raise TimeoutError(f"Timeout waiting for dataset to be ready after {original_timeout} seconds.")
 
         self.update_episode_count()
 
@@ -113,31 +136,31 @@ class RecordingManager(ABC):
     def _create_dataset(self) -> LeRobotDataset:
         """Factory function to create a dataset object."""
         logger.debug("Creating dataset object.")
-        if self.resume:
-            logger.info(f"Resuming recording from existing dataset: {self.repo_id}")
-            dataset = LeRobotDataset(repo_id=self.repo_id)
-            if self.num_episodes <= dataset.num_episodes:
+        if self.config.resume:
+            logger.info(f"Resuming recording from existing dataset: {self.config.repo_id}")
+            dataset = LeRobotDataset(repo_id=self.config.repo_id)
+            if self.config.num_episodes <= dataset.num_episodes:
                 logger.error(
                     f"The dataset already has {dataset.num_episodes} recorded. Please select a larger number."
                 )
                 exit()
             logger.info(
-                f"Resuming from episode {dataset.num_episodes} with {self.num_episodes} episodes to record."
+                f"Resuming from episode {dataset.num_episodes} with {self.config.num_episodes} episodes to record."
             )
             self.episode_count_queue.put(dataset.num_episodes - 1)
         else:
-            logger.info(f"[green]Creating new dataset: {self.repo_id}", extra={"markup": True})
+            logger.info(f"[green]Creating new dataset: {self.config.repo_id}", extra={"markup": True})
             # Clean up existing dataset if it exists
-            if Path(HF_LEROBOT_HOME / self.repo_id).exists():
+            if Path(HF_LEROBOT_HOME / self.config.repo_id).exists():
                 logger.error(
-                    f"The repo_id already exists. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise remove it:\n'rm -r {str(Path(HF_LEROBOT_HOME / self.repo_id))}'."
+                    f"The repo_id already exists. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise remove it:\n'rm -r {str(Path(HF_LEROBOT_HOME / self.config.repo_id))}'."
                 )
                 exit()
             dataset = LeRobotDataset.create(
-                repo_id=self.repo_id,
-                fps=self.fps,
-                robot_type=self.robot_type,
-                features=self.features,
+                repo_id=self.config.repo_id,
+                fps=self.config.fps,
+                robot_type=self.config.robot_type,
+                features=self.config.features,
                 use_videos=True,
             )
             logger.debug(f"Dataset created with meta: {dataset.meta}")
@@ -148,7 +171,7 @@ class RecordingManager(ABC):
         logger.info("Starting dataset writer process.")
         dataset = self._create_dataset()
         self.dataset_ready.set()
-        logger.debug(f"Dataset features: {list(self.features.keys())}")
+        logger.debug(f"Dataset features: {list(self.config.features.keys())}")
 
         while True:
             msg = self.queue.get()
@@ -165,7 +188,7 @@ class RecordingManager(ABC):
                     frame = {"action": action.astype(np.float32)}
 
                     # Add all observation features that match our dataset features
-                    for feature_name in self.features:
+                    for feature_name in self.config.features:
                         if feature_name == "action":
                             continue  # Already added above
                         if feature_name in obs:
@@ -178,13 +201,13 @@ class RecordingManager(ABC):
                                 frame[feature_name] = value
 
                     # Concatenate state vector
-                    frame["observation.state"] = concatenate_state_features(obs, self.features)
+                    frame["observation.state"] = concatenate_state_features(obs, self.config.features)
 
                     logger.debug(f"Constructed frame with keys: {frame.keys()}")
                     dataset.add_frame(frame, task=task)
 
                 elif mtype == "SAVE_EPISODE":
-                    if self.use_sound:
+                    if self.config.use_sound:
                         try:
                             subprocess.Popen(
                                 [
@@ -214,7 +237,7 @@ class RecordingManager(ABC):
                     )
 
                 elif mtype == "DELETE_EPISODE":
-                    if self.use_sound:
+                    if self.config.use_sound:
                         try:
                             subprocess.Popen(
                                 [
@@ -236,7 +259,7 @@ class RecordingManager(ABC):
                         "Pushing dataset to Hugging Face Hub...",
                     )
                     try:
-                        dataset.push_to_hub(repo_id=self.repo_id, private=True)
+                        dataset.push_to_hub(repo_id=self.config.repo_id, private=True)
                         logger.info("Dataset pushed to Hugging Face Hub successfully.")
                     except Exception as e:
                         logger.error(
@@ -289,18 +312,18 @@ class RecordingManager(ABC):
             if obs is None or action is None:
                 logger.debug("Data function returned None, skipping frame.")
                 # If the data function returns None, skip this frame
-                sleep_time = 1 / self.fps - (time.time() - frame_start)
+                sleep_time = 1 / self.config.fps - (time.time() - frame_start)
                 time.sleep(sleep_time)
                 continue
 
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
-            sleep_time = 1 / self.fps - (time.time() - frame_start)
+            sleep_time = 1 / self.config.fps - (time.time() - frame_start)
             if sleep_time > 0:
                 time.sleep(sleep_time)
             else:
                 logger.warning(
-                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS. "
+                    f"Frame processing took too long: {time.time() - frame_start - 1.0 / self.config.fps:.3f} seconds too long i.e. {1.0 / (time.time() - frame_start):.2f} FPS. "
                     "Consider decreasing the FPS or optimizing the data function."
                 )
             logger.debug(f"Finished sleeping for {sleep_time:.3f} seconds.")
@@ -354,7 +377,7 @@ class RecordingManager(ABC):
                 exc_info=(exc_type, exc_value, traceback),
             )
 
-        if not self.push_to_hub:
+        if not self.config.push_to_hub:
             logger.info("Not pushing dataset to Hugging Face Hub.")
         else:
             self.queue.put({"type": "PUSH_TO_HUB"})
@@ -367,18 +390,23 @@ class RecordingManager(ABC):
         """Set to wait if possible."""
         if self.state not in ["to_be_saved", "to_be_deleted"]:
             raise ValueError("Can not go to wait state if the state is not to be saved or deleted!")
-        if self.episode_count >= self.num_episodes:
+        if self.episode_count >= self.config.num_episodes:
             self.state = "exit"
         else:
             self.state = "is_waiting"
 
 
 class ROSRecordingManager(RecordingManager):
-    """Keyboard event listener for controlling episode recording."""
+    """ROS-based recording manager for controlling episode recording."""
 
-    def __init__(self, **kwargs) -> None:  # noqa: ANN003
-        """Initialize keyboard listener with state flags."""
-        super().__init__(**kwargs)
+    def __init__(self, config: RecordingManagerConfig | None = None, **kwargs) -> None:  # noqa: ANN003
+        """Initialize ROS recording manager.
+        
+        Args:
+            config: RecordingManagerConfig instance. If provided, **kwargs are ignored except for backwards compatibility.
+            **kwargs: Individual parameters for backwards compatibility.
+        """
+        super().__init__(config=config, **kwargs)
         if not rclpy.ok():
             raise RuntimeError(
                 "ROS2 is not initialized. Please initialize ROS2 before using the RecordingManager."
@@ -448,11 +476,16 @@ class ROSRecordingManager(RecordingManager):
 
 
 class KeyboardRecordingManager(RecordingManager):
-    """Keyboard event listener for controlling episode recording."""
+    """Keyboard-based recording manager for controlling episode recording."""
 
-    def __init__(self, **kwargs) -> None:  # noqa: ANN003
-        """Initialize keyboard listener with state flags."""
-        super().__init__(**kwargs)
+    def __init__(self, config: RecordingManagerConfig | None = None, **kwargs) -> None:  # noqa: ANN003
+        """Initialize keyboard recording manager.
+        
+        Args:
+            config: RecordingManagerConfig instance. If provided, **kwargs are ignored except for backwards compatibility.
+            **kwargs: Individual parameters for backwards compatibility.
+        """
+        super().__init__(config=config, **kwargs)
         self.listener = keyboard.Listener(on_press=self._on_press)
 
     @override
@@ -506,12 +539,42 @@ class KeyboardRecordingManager(RecordingManager):
 
 def make_recording_manager(
     recording_manager_type: Literal["keyboard", "ros"],
+    config: RecordingManagerConfig | None = None,
+    config_path: Path | str | None = None,
     **kwargs: dict,
 ) -> RecordingManager:
-    """Factory function to create a recording manager."""
+    """Factory function to create a recording manager.
+    
+    Args:
+        recording_manager_type: Type of recording manager to create.
+        config: RecordingManagerConfig instance. Takes precedence over config_path.
+        config_path: Path to YAML config file to load.
+        **kwargs: Additional arguments to override config values or for backwards compatibility.
+        
+    Returns:
+        A RecordingManager instance of the specified type.
+    """
+    # Handle configuration loading
+    if config is not None:
+        # Use provided config, but allow kwargs to override
+        if kwargs:
+            # Create a new config with overrides
+            config_dict = config.__dict__.copy()
+            config_dict.update(kwargs)
+            final_config = RecordingManagerConfig(**config_dict)
+        else:
+            final_config = config
+    elif config_path is not None:
+        # Load from YAML with kwargs as overrides
+        final_config = RecordingManagerConfig.from_yaml(config_path, **kwargs)
+    else:
+        # Backwards compatibility: create config from kwargs
+        final_config = None  # Will be handled by individual constructors
+        
+    # Create the appropriate recording manager
     if recording_manager_type == "keyboard":
-        return KeyboardRecordingManager(**kwargs)
+        return KeyboardRecordingManager(config=final_config, **kwargs if final_config is None else {})
     elif recording_manager_type == "ros":
-        return ROSRecordingManager(**kwargs)
+        return ROSRecordingManager(config=final_config, **kwargs if final_config is None else {})
     else:
         raise ValueError(f"Unknown recording manager type: {recording_manager_type}")
