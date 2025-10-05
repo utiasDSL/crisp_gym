@@ -1,5 +1,6 @@
 """Example testing environment."""
 
+import ctypes
 import logging
 
 from gymnasium.spaces import Dict
@@ -13,7 +14,7 @@ logger = logging.getLogger(__name__)
 setup_logging()
 
 try:
-    env = make_env("minimal_env", control_type="cartesian")
+    env = make_env(namespace="right", env_type="fake_cam_setup", control_type="cartesian")
 except Exception as e:
     logger.exception(e)
     env = None
@@ -28,5 +29,38 @@ print([key for key in env.observation_space.keys()])
 
 # %%
 
-features = get_features(env)
-print(features)
+obs_struct_cls = env.create_obs_struct_for_env()
+action_struct_cls = env.create_action_struct_for_env()
+
+
+# %%
+import iceoryx2 as iox2
+
+service_name = "example_obs_service"
+
+
+node = iox2.NodeBuilder.new().create(iox2.ServiceType.Ipc)
+service = (
+    node.service_builder(iox2.ServiceName.new(service_name))
+    .publish_subscribe(obs_struct_cls)
+    .open_or_create()
+)
+publisher = service.publisher_builder().create()
+
+# %%
+env.wait_until_ready()
+
+# %%
+import time
+
+start_time = time.time()
+while time.time() - start_time < 30.0:
+    sample = publisher.loan_uninit()
+
+    obs = env.get_obs()
+    sample = sample.write_payload(
+        obs_struct_cls(**{key: getattr(obs, key) for key in obs_struct_cls.__annotations__.keys()})
+    )
+    sample.send()
+
+    time.sleep(1.0 / 100.0)
