@@ -10,3 +10,4 @@ pixi.lock
 scripts/set_env.sh
 outputs/
 models/
+crisp.log
