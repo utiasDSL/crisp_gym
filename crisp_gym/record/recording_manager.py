@@ -22,6 +22,7 @@ from rich.panel import Panel
 from std_msgs.msg import String
 from typing_extensions import override
 
+from crisp_gym.config.path import find_config
 from crisp_gym.record.recording_manager_config import RecordingManagerConfig
 from crisp_gym.util.lerobot_features import concatenate_state_features
 
@@ -34,55 +35,30 @@ class RecordingManager(ABC):
     def __init__(
         self,
         config: RecordingManagerConfig | None = None,
-        # Backwards compatibility - individual parameters
-        features: dict | None = None,
-        repo_id: str | None = None,
-        robot_type: str = "Franka",
-        resume: bool = False,
-        fps: int = 30,
-        num_episodes: int = 3,
-        push_to_hub: bool = False,
-        use_sound: bool = True,
-        queue_size: int = 16,
-        writer_timeout: float = 10.0,
+        **kwargs,  # noqa: ANN003
     ) -> None:
         """Initialize the recording manager.
 
         Args:
             config: RecordingManagerConfig instance. If provided, other parameters are ignored.
-            features: The features to record (backwards compatibility).
-            repo_id: The repository ID for the dataset (backwards compatibility).
-            robot_type: The type of robot (default is "Franka").
-            resume: Whether to resume from an existing dataset (default is False).
-            fps: Frames per second for the dataset (default is 30).
-            num_episodes: Number of episodes to record (default is 3).
-            push_to_hub: Whether to push the dataset to Hugging Face Hub (default is False).
-            use_sound: Whether to use sound notifications for episode completion (default is True).
-            queue_size: Size of the multiprocessing queue (default is 16).
-            writer_timeout: Timeout for dataset writer initialization (default is 10.0).
+            **kwargs: Individual parameters for backwards compatibility.
         """
         # Handle config vs individual parameters
-        if config is not None:
-            self.config = config
-        else:
-            # Backwards compatibility: create config from individual parameters
-            if features is None or repo_id is None:
-                raise ValueError("Either config must be provided, or both features and repo_id must be specified.")
-            self.config = RecordingManagerConfig(
-                features=features,
-                repo_id=repo_id,
-                robot_type=robot_type,
-                resume=resume,
-                fps=fps,
-                num_episodes=num_episodes,
-                push_to_hub=push_to_hub,
-                use_sound=use_sound,
-                queue_size=queue_size,
-                writer_timeout=writer_timeout,
+        self.config = (
+            config
+            if config is not None
+            else RecordingManagerConfig.from_yaml(
+                find_config("recording/default_recording.yaml"), **kwargs
             )
-            
+        )
+
         self.state: Literal[
-            "is_waiting", "recording", "paused", "to_be_saved", "to_be_deleted", "exit"
+            "is_waiting",
+            "recording",
+            "paused",
+            "to_be_saved",
+            "to_be_deleted",
+            "exit",
         ] = "is_waiting"
 
         self.episode_count = 0
@@ -100,18 +76,25 @@ class RecordingManager(ABC):
         )
         self.writer.start()
 
+    @property
+    def num_episodes(self) -> int:
+        """Return the number of episodes to record."""
+        return self.config.num_episodes
+
     def wait_until_ready(self, timeout: float | None = None) -> None:
         """Wait until the dataset writer is ready."""
         if timeout is None:
             timeout = self.config.writer_timeout
-            
+
         original_timeout = timeout
         while not self.dataset_ready.is_set():
             logger.debug("Waiting for dataset to be ready...")
             time.sleep(1.0)
             timeout -= 1.0
             if timeout <= 0.0:
-                raise TimeoutError(f"Timeout waiting for dataset to be ready after {original_timeout} seconds.")
+                raise TimeoutError(
+                    f"Timeout waiting for dataset to be ready after {original_timeout} seconds."
+                )
 
         self.update_episode_count()
 
@@ -149,13 +132,17 @@ class RecordingManager(ABC):
             )
             self.episode_count_queue.put(dataset.num_episodes - 1)
         else:
-            logger.info(f"[green]Creating new dataset: {self.config.repo_id}", extra={"markup": True})
+            logger.info(
+                f"[green]Creating new dataset: {self.config.repo_id}", extra={"markup": True}
+            )
             # Clean up existing dataset if it exists
             if Path(HF_LEROBOT_HOME / self.config.repo_id).exists():
                 logger.error(
                     f"The repo_id already exists. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise remove it:\n'rm -r {str(Path(HF_LEROBOT_HOME / self.config.repo_id))}'."
                 )
-                exit()
+                raise FileExistsError(
+                    f"The repo_id already exists. If you intended to resume the collection of data, then execute this script with the --resume flag. Otherwise remove it:\n'rm -r {str(Path(HF_LEROBOT_HOME / self.config.repo_id))}'."
+                )
             dataset = LeRobotDataset.create(
                 repo_id=self.config.repo_id,
                 fps=self.config.fps,
@@ -201,7 +188,9 @@ class RecordingManager(ABC):
                                 frame[feature_name] = value
 
                     # Concatenate state vector
-                    frame["observation.state"] = concatenate_state_features(obs, self.config.features)
+                    frame["observation.state"] = concatenate_state_features(
+                        obs, self.config.features
+                    )
 
                     logger.debug(f"Constructed frame with keys: {frame.keys()}")
                     dataset.add_frame(frame, task=task)
@@ -401,7 +390,7 @@ class ROSRecordingManager(RecordingManager):
 
     def __init__(self, config: RecordingManagerConfig | None = None, **kwargs) -> None:  # noqa: ANN003
         """Initialize ROS recording manager.
-        
+
         Args:
             config: RecordingManagerConfig instance. If provided, **kwargs are ignored except for backwards compatibility.
             **kwargs: Individual parameters for backwards compatibility.
@@ -480,7 +469,7 @@ class KeyboardRecordingManager(RecordingManager):
 
     def __init__(self, config: RecordingManagerConfig | None = None, **kwargs) -> None:  # noqa: ANN003
         """Initialize keyboard recording manager.
-        
+
         Args:
             config: RecordingManagerConfig instance. If provided, **kwargs are ignored except for backwards compatibility.
             **kwargs: Individual parameters for backwards compatibility.
@@ -544,37 +533,31 @@ def make_recording_manager(
     **kwargs: dict,
 ) -> RecordingManager:
     """Factory function to create a recording manager.
-    
+
     Args:
         recording_manager_type: Type of recording manager to create.
         config: RecordingManagerConfig instance. Takes precedence over config_path.
         config_path: Path to YAML config file to load.
         **kwargs: Additional arguments to override config values or for backwards compatibility.
-        
+
     Returns:
         A RecordingManager instance of the specified type.
     """
-    # Handle configuration loading
     if config is not None:
-        # Use provided config, but allow kwargs to override
         if kwargs:
-            # Create a new config with overrides
             config_dict = config.__dict__.copy()
             config_dict.update(kwargs)
             final_config = RecordingManagerConfig(**config_dict)
         else:
             final_config = config
     elif config_path is not None:
-        # Load from YAML with kwargs as overrides
         final_config = RecordingManagerConfig.from_yaml(config_path, **kwargs)
     else:
-        # Backwards compatibility: create config from kwargs
-        final_config = None  # Will be handled by individual constructors
-        
-    # Create the appropriate recording manager
+        final_config = None
+
     if recording_manager_type == "keyboard":
-        return KeyboardRecordingManager(config=final_config, **kwargs if final_config is None else {})
+        return KeyboardRecordingManager(config=final_config, **kwargs)
     elif recording_manager_type == "ros":
-        return ROSRecordingManager(config=final_config, **kwargs if final_config is None else {})
+        return ROSRecordingManager(config=final_config, **kwargs)
     else:
         raise ValueError(f"Unknown recording manager type: {recording_manager_type}")

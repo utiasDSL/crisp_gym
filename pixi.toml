@@ -29,10 +29,10 @@ libgl-devel = "*"
 [environments]
 dev = { features = ["dev"] }
 humble = { features = ["humble"] }
-humble-lerobot = { features = ["humble", "lerobot"] }
+humble-lerobot = { features = ["humble", "lerobot", "dev"] }
 lerobot = { features = ["lerobot"] }
 jazzy = { features = ["jazzy"] }
-jazzy-lerobot = { features = ["jazzy", "lerobot"] }
+jazzy-lerobot = { features = ["jazzy", "lerobot", "dev"] }
 
 [feature.dev.pypi-dependencies]
 pre-commit = "*"
