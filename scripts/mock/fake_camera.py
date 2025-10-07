@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+"""Fake camera publisher node for ROS2 that generates and publishes noise images and camera info."""
+#!/usr/bin/env python3  # noqa: D100
 
 import argparse
 import threading
@@ -6,17 +7,16 @@ import threading
 import cv2
 import numpy as np
 import rclpy
-from rclpy.node import Node
+from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.executors import MultiThreadedExecutor
+from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CameraInfo, CompressedImage
 from std_msgs.msg import Header
 
-from rclpy.qos import qos_profile_sensor_data
-from rclpy.callback_groups import ReentrantCallbackGroup
 
-
-class FakeCameraPublisher(Node):
-    def __init__(
+class FakeCameraPublisher(Node):  # noqa: D101
+    def __init__(  # noqa: D107
         self,
         camera_name: str = "camera",
         image_width: int = 640,

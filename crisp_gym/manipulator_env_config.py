@@ -79,7 +79,9 @@ class ManipulatorEnvConfig(ABC):
                 # Load from external YAML file
                 gripper_yaml_path = find_config(gripper_cfg["from_yaml"])
                 if gripper_yaml_path is None:
-                    raise FileNotFoundError(f"Gripper config file '{gripper_cfg['from_yaml']}' not found in any CRISP config paths")
+                    raise FileNotFoundError(
+                        f"Gripper config file '{gripper_cfg['from_yaml']}' not found in any CRISP config paths"
+                    )
                 data["gripper_config"] = GripperConfig.from_yaml(path=gripper_yaml_path.resolve())
             else:
                 data["gripper_config"] = GripperConfig(**gripper_cfg)
@@ -110,10 +112,12 @@ class FrankaEnvConfig(ManipulatorEnvConfig, ABC):
 
     # Default controller configurations for Franka
     cartesian_control_param_config: Path | None = field(
-        default_factory=lambda: find_config("control/default_cartesian_impedance.yaml") or CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
+        default_factory=lambda: find_config("control/default_cartesian_impedance.yaml")
+        or CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
     )
     joint_control_param_config: Path | None = field(
-        default_factory=lambda: find_config("control/joint_control.yaml") or CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
+        default_factory=lambda: find_config("control/joint_control.yaml")
+        or CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
     )
 
 
@@ -139,7 +143,9 @@ class LeftNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml").resolve()
+            path=(
+                find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml"
+            ).resolve()
         )
     )
 
@@ -152,7 +158,9 @@ class RightNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml").resolve()
+            path=(
+                find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml"
+            ).resolve()
         )
     )
 
@@ -196,7 +204,9 @@ class AlohaFrankaEnvConfig(FrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_aloha.yaml") or CRISP_CONFIG_PATH / "gripper_aloha.yaml").resolve()
+            path=(
+                find_config("gripper_aloha.yaml") or CRISP_CONFIG_PATH / "gripper_aloha.yaml"
+            ).resolve()
         )
     )
     camera_configs: List[CameraConfig] = field(default_factory=lambda: [])
@@ -210,7 +220,9 @@ class LeftAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml").resolve()
+            path=(
+                find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml"
+            ).resolve()
         )
     )
 
@@ -240,7 +252,9 @@ class RightAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml").resolve()
+            path=(
+                find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml"
+            ).resolve()
         )
     )
 

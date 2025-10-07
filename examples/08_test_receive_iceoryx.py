@@ -1,12 +1,13 @@
-import time
-import iceoryx2 as iox2
-import logging
+"""Example of receiving observation data via iceoryx."""
 
-from gymnasium.spaces import Dict
+# WARNING: This is a protyping script and not meant for usage for now.
+import logging
+import time
+
+import iceoryx2 as iox2
 from rich import print
 
 from crisp_gym.manipulator_env import make_env
-from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
 
 logger = logging.getLogger(__name__)
