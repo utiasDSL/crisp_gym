@@ -3,7 +3,7 @@
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List
+from typing import List
 
 import yaml
 from crisp_py.camera.camera_config import CameraConfig
@@ -11,7 +11,7 @@ from crisp_py.gripper.gripper import GripperConfig
 from crisp_py.robot_config import FrankaConfig, RobotConfig, make_robot_config
 from crisp_py.sensors.sensor_config import SensorConfig, make_sensor_config
 
-from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config
+from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
 
 
 @dataclass(kw_only=True)
@@ -311,16 +311,12 @@ def make_env_config(
     config_class = STRING_TO_CONFIG.get(env_type.lower())
     if config_class is None:
         # Try to find YAML config if not in predefined types
-        yaml_configs = discover_yaml_configs()
-        if env_type in yaml_configs:
-            config_path = yaml_configs[env_type]
-            # Default to base class for YAML-only configs
-            config_class = ManipulatorEnvConfig
-        else:
+        config_path = find_config("envs/" + env_type.lower() + ".yaml")
+        if config_path is None:
             raise ValueError(
-                f"Unsupported environment type: {env_type}, available types are {list(STRING_TO_CONFIG.keys())} "
-                f"and discovered YAML configs: {list(yaml_configs.keys())}"
+                f"Unsupported environment type: {env_type}. The list of supported types are: {list_env_configs()}"
             )
+        config_class = ManipulatorEnvConfig
 
     if config_path:
         config_path = Path(config_path) if isinstance(config_path, str) else config_path
@@ -329,37 +325,11 @@ def make_env_config(
     return config_class(**overrides)
 
 
-def discover_yaml_configs(config_dirs: list[Path] | None = None) -> Dict[str, Path]:
-    """Auto-discover YAML configuration files from multiple directories.
-
-    Args:
-        config_dirs: Directories to search for YAML configs. Defaults to local crisp_gym/config/envs
-                    and CRISP_CONFIG_PATH/envs
-    Returns:
-        Dict mapping config names (without .yaml extension) to their file paths
-    """
-    if config_dirs is None:
-        # Check both local crisp_gym configs and external CRISP configs
-        from pathlib import Path
-
-        local_config_dir = Path(__file__).parent / "config" / "envs"
-        config_dirs = [local_config_dir, CRISP_CONFIG_PATH / "envs"]
-
-    discovered_configs = {}
-    for config_dir in config_dirs:
-        if config_dir.exists():
-            # Local configs take precedence over CRISP_CONFIG_PATH configs
-            for yaml_file in config_dir.glob("*.yaml"):
-                if yaml_file.stem not in discovered_configs:
-                    discovered_configs[yaml_file.stem] = yaml_file
-
-    return discovered_configs
-
-
 def list_env_configs() -> list[str]:
     """List all available environment configurations."""
     predefined = list(STRING_TO_CONFIG.keys())
-    yaml_configs = list(discover_yaml_configs().keys())
+    other = list_configs_in_folder("envs")
+    yaml_configs = [file.stem for file in other if file.suffix == ".yaml"]
     return predefined + yaml_configs
 
 

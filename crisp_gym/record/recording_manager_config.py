@@ -6,6 +6,8 @@ from typing import Any, Dict
 
 import yaml
 
+from crisp_gym.config.path import find_config, list_configs_in_folder
+
 
 @dataclass(kw_only=True)
 class RecordingManagerConfig:
@@ -82,3 +84,49 @@ class RecordingManagerConfig:
 
         with open(yaml_path, "w") as f:
             yaml.dump(config_dict, f, default_flow_style=False, sort_keys=True)
+
+
+def make_recording_manager_config(
+    name: str,
+    config_path: Path | str | None = None,
+    **overrides,  # noqa: ANN003
+) -> RecordingManagerConfig:
+    """Factory function to create a recording manager configuration based on the type.
+
+    This function allows for both predefined recording manager types and custom YAML configurations.
+    It will first check if the type is in the predefined set, and if not, it will look for a YAML config file.
+
+    Args:
+        name: Type of recording manager configuration
+        config_path: Optional path to YAML config file
+        **overrides: Additional parameters to override defaults/YAML values
+
+    Returns:
+        RecordingManagerConfig: Configured recording manager instance
+    """
+    config_class = STRING_TO_CONFIG.get(name.lower())
+    if config_class is None:
+        # Try to find YAML config if not in predefined types
+        config_path = find_config("recording/" + name.lower() + ".yaml")
+        if config_path is None:
+            raise ValueError(
+                f"Unsupported recording manager type: {name}. The list of supported types are: {list_recording_configs()}"
+            )
+        config_class = RecordingManagerConfig
+
+    if config_path:
+        config_path = Path(config_path) if isinstance(config_path, str) else config_path
+        return config_class.from_yaml(config_path, **overrides)
+
+    return config_class(**overrides)
+
+
+def list_recording_configs() -> list[str]:
+    """List all available recording manager configurations."""
+    predefined = list(STRING_TO_CONFIG.keys())
+    other = list_configs_in_folder("recording")
+    yaml_configs = [file.stem for file in other if file.suffix == ".yaml"]
+    return predefined + yaml_configs
+
+
+STRING_TO_CONFIG: Dict[str, type[RecordingManagerConfig]] = {}
