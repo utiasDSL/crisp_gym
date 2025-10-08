@@ -49,14 +49,7 @@ def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamed
         action_pose = pose - prev_pose
         prev_pose = pose
 
-        if env.gripper.value is None:
-            gripper = 0.0
-        else:
-            gripper = env.gripper.value + np.clip(
-                leader.last_gripper - env.gripper.value,
-                -env.gripper.config.max_delta,
-                env.gripper.config.max_delta,
-            )
+        gripper = leader.gripper.value if leader.gripper is not None else 0.0
 
         action = np.concatenate(
             [
