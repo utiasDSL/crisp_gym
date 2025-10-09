@@ -32,6 +32,11 @@ class RecordingManagerConfig:
     queue_size: int = 16
     writer_timeout: float = 10.0
 
+    # Bag recording configuration
+    use_bag_recording: bool = False
+    bag_output_path: str = "/tmp/crisp_bags"
+    bag_compression: str = "zstd"
+
     @classmethod
     def from_yaml(cls, yaml_path: Path | str, **overrides) -> "RecordingManagerConfig":  # noqa: ANN003
         """Create a RecordingManagerConfig from a YAML file.

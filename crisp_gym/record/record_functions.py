@@ -49,7 +49,7 @@ def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamed
         action_pose = pose - prev_pose
         prev_pose = pose
 
-        gripper = leader.gripper.value if leader.gripper is not None else 0.0
+        gripper = leader.gripper
 
         action = np.concatenate(
             [
@@ -57,7 +57,9 @@ def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamed
                 [gripper],
             ]
         )
-        obs, *_ = env.step(action, block=False)
+        action = np.random.uniform(-1, 1, size=env.action_space.shape) * 0.0
+        # obs, *_ = env.step(action, block=False)
+        obs = {}
         return obs, action
 
     return _fn

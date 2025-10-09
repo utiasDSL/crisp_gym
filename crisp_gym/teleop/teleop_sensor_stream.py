@@ -24,7 +24,7 @@ class TeleopStreamedPose:
         self._prefix = f"{namespace}_" if namespace else ""
 
         self._last_pose: Pose | None = None
-        self._last_gripper: float | None = None
+        self._last_gripper: float | None = 0.0
 
         # Set this with config
         self._gripper_topic = f"/{self._prefix}phone_gripper"
@@ -40,7 +40,7 @@ class TeleopStreamedPose:
 
         self.node.create_subscription(
             Float32,
-            self._griper_topic,
+            self._gripper_topic,
             callback=self._callback_gripper,
             callback_group=ReentrantCallbackGroup(),
             qos_profile=qos_profile_sensor_data,
@@ -62,7 +62,7 @@ class TeleopStreamedPose:
         return self._last_pose
 
     @property
-    def last_gripper(self) -> float:
+    def gripper(self) -> float:
         """Get the last received gripper value.
 
         Returns:
@@ -81,9 +81,11 @@ class TeleopStreamedPose:
             executor.spin_once(timeout_sec=0.1)
 
     def _callback_gripper(self, msg: Float32):
+        self.node.get_logger().info(f"Received gripper: {msg}")
         self._last_gripper = msg.data
 
     def _callback_pose(self, msg: PoseStamped):
+        self.node.get_logger().info(f"Received pose: {msg}")
         self._last_pose = Pose.from_ros_msg(msg)
 
     def is_ready(self) -> bool:
@@ -103,3 +105,15 @@ class TeleopStreamedPose:
                 raise TimeoutError("Timed out waiting for the teleop streamer to be ready.")
         if not rclpy.ok():
             raise RuntimeError("ROS2 has been shutdown.")
+
+
+def make_teleop_streamer(namespace: str = "") -> TeleopStreamedPose:
+    """Create a TeleopStreamedPose instance.
+
+    Args:
+        namespace (str, optional): Namespace for the teleop streamer. Defaults to "".
+
+    Returns:
+        TeleopStreamedPose: A fully initialized TeleopStreamedPose instance.
+    """
+    return TeleopStreamedPose(namespace=namespace)

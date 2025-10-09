@@ -8,11 +8,11 @@ import rclpy  # noqa: F401
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import home_close_to_table
-from crisp_gym.config.path import CRISP_CONFIG_PATH
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
 from crisp_gym.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import make_teleop_fn, make_teleop_streamer_fn
 from crisp_gym.record.recording_manager import make_recording_manager
+from crisp_gym.record.recording_manager_config import make_recording_manager_config
 from crisp_gym.teleop.teleop_robot import TeleopRobot, make_leader
 from crisp_gym.teleop.teleop_robot_config import list_leader_configs
 from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
@@ -173,6 +173,7 @@ try:
     if args.use_streamed_teleop:
         leader = TeleopStreamedPose()
         logger.info("Using streamed teleop for the leader robot.")
+        leader.wait_until_ready()
     else:
         leader = make_leader(args.leader_config, namespace=args.leader_namespace)
         leader.wait_until_ready()
@@ -180,9 +181,9 @@ try:
         leader.config.leader.time_to_home = 2.0
         logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
-    keys_to_ignore = []
-    # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
-    features = get_features(env=env, ignore_keys=keys_to_ignore)
+    features = get_features(env=env)
+    topic_to_features = env.get_topics_to_features()
+
     logger.debug(f"Using the features: {features}")
 
     if args.use_streamed_teleop and ctrl_type != "cartesian":
@@ -190,8 +191,8 @@ try:
             "Streamed teleop is only compatible with Cartesian control. Please disable joint control."
         )
 
-    recording_manager = make_recording_manager(
-        recording_manager_type=args.recording_manager_type,
+    recording_manager_config = make_recording_manager_config(
+        "bag_recording",
         features=features,
         repo_id=args.repo_id,
         robot_type=args.robot_type,
@@ -199,6 +200,11 @@ try:
         fps=args.fps,
         resume=args.resume,
         push_to_hub=args.push_to_hub,
+    )
+    recording_manager = make_recording_manager(
+        recording_manager_type=args.recording_manager_type,
+        config=recording_manager_config,
+        topics_to_record=list(topic_to_features.keys()),
     )
     recording_manager.wait_until_ready()
 
@@ -227,7 +233,7 @@ try:
                 )
             except Exception:
                 leader.robot.cartesian_controller_parameters_client.load_param_config(
-                    CRISP_CONFIG_PATH / "control" / "gravity_compensation_on_plane.yaml"
+                    "gravity_compensation_on_plane.yaml"
                 )
                 leader.robot.controller_switcher_client.switch_controller(
                     "cartesian_impedance_controller"

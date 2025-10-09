@@ -1,8 +1,4 @@
-# Default recording manager configuration
-# This is an example configuration file showing all available parameters
-
-# Dataset configuration
-repo_id: "example_dataset"
+repo_id: "bag_recorded_dataset"
 robot_type: "Franka"
 resume: false
 fps: 30
@@ -15,6 +11,6 @@ queue_size: 16
 writer_timeout: 10.0
 
 # Bag recording configuration
-use_bag_recording: false
+use_bag_recording: true
 bag_output_path: "/tmp/crisp_bags"
 bag_compression: "zstd"

@@ -204,7 +204,7 @@ class ManipulatorBaseEnv(gym.Env):
         for sensor in self.sensors:
             sensor.wait_until_ready(timeout=3)
 
-        logger.debug("*Robot, gripper, cameras, and sensors are ready.*")
+        logger.debug("Robot, gripper, cameras, and sensors are ready.")
 
     def get_obs(self) -> dict:
         """Retrieve the current observation from the robot in LeRobot format and allow backward compatibility."""
@@ -256,6 +256,35 @@ class ManipulatorBaseEnv(gym.Env):
             obs[f"observation.state.sensor_{sensor.config.name}"] = sensor.value
 
         return obs
+
+    def get_topics_to_features(self) -> dict:
+        """Get a mapping of ROS2 topics to observation feature names.
+
+        Returns:
+            dict: A dictionary mapping ROS2 topics to observation feature names.
+        """
+        topic_to_feature = {}
+
+        # TODO: do not use private members
+
+        topic_to_feature[self.robot._joint_subscriber.topic_name] = "observation.state.joint"
+        topic_to_feature[self.robot._pose_subscriber.topic_name] = "observation.state.cartesian"
+        if self.config.gripper_enabled:
+            topic_to_feature[self.gripper._joint_subscriber.topic_name] = (
+                "observation.state.gripper"
+            )
+
+        for camera in self.cameras:
+            topic_to_feature[camera._camera_subscriber.topic_name] = (
+                f"observation.images.{camera.config.camera_name}"
+            )
+
+        for sensor in self.sensors:
+            topic_to_feature[sensor.sensor_subscriber.topic_name] = (
+                f"observation.state.sensor_{sensor.config.name}"
+            )
+
+        return topic_to_feature
 
     def _set_gripper_action(self, action: float):
         """Execute the gripper action.

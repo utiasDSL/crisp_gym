@@ -8,7 +8,7 @@ dependencies = [
     "ruff>=0.11.9",
     "gymnasium>=0.26.3,<2",
     "scipy>=1.15.2,<2",
-    "crisp_python>=1.6.0,<2",
+    # "crisp_python>=1.6.0,<2",
     "rich>=14.0.0, <15",
 ]
 authors = [
