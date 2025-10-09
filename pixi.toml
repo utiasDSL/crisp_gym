@@ -29,22 +29,26 @@ libgl-devel = "*"
 [environments]
 dev = { features = ["dev"] }
 humble = { features = ["humble"] }
-humble-lerobot = { features = ["humble", "lerobot", "dev"] }
+humble-lerobot = { features = ["humble", "lerobot", "lerobot-external", "dev"] }
+humble-lerobot-local = { features = ["humble", "lerobot", "lerobot-local", "dev"] }
 lerobot = { features = ["lerobot"] }
 jazzy = { features = ["jazzy"] }
-jazzy-lerobot = { features = ["jazzy", "lerobot", "dev"] }
+jazzy-lerobot = { features = ["jazzy", "lerobot", "lerobot-external", "dev"] }
+jazzy-lerobot-local = { features = ["jazzy", "lerobot", "lerobot-local", "dev"] }
 
 [feature.dev.pypi-dependencies]
 pre-commit = "*"
 ruff = "*"
 
-[feature.lerobot.pypi-dependencies]
-# lerobot = { path = "../lerobot", editable = false }
-lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
-
 [feature.lerobot.dependencies]
 pynput = "*"
 rerun-sdk = "==0.22.0"
+
+[feature.lerobot-external.pypi-dependencies]
+lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
+
+[feature.lerobot-local.pypi-dependencies]
+lerobot = { path = "../lerobot", editable = true }
 
 [feature.humble]
 channels = ["https://prefix.dev/robostack-humble"]
