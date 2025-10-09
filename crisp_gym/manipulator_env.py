@@ -23,7 +23,6 @@ while True:
 
 """
 
-import ctypes
 import logging
 import os
 from pathlib import Path
