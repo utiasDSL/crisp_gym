@@ -49,14 +49,7 @@ def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamed
         action_pose = pose - prev_pose
         prev_pose = pose
 
-        if env.gripper.value is None:
-            gripper = 0.0
-        else:
-            gripper = env.gripper.value + np.clip(
-                leader.last_gripper - env.gripper.value,
-                -env.gripper.config.max_delta,
-                env.gripper.config.max_delta,
-            )
+        gripper = leader.gripper.value if leader.gripper is not None else 0.0
 
         action = np.concatenate(
             [
@@ -114,16 +107,7 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
         prev_pose = pose
         prev_joint = joint
 
-        if leader.gripper is None or leader.gripper.value is None:
-            gripper = 0.0
-        elif env.gripper.value is None:
-            gripper = 0.0
-        else:
-            gripper = env.gripper.value + np.clip(
-                leader.gripper.value - env.gripper.value,
-                -env.gripper.config.max_delta,
-                env.gripper.config.max_delta,
-            )
+        gripper = leader.gripper.value if leader.gripper is not None else 0.0
 
         action = None
         if env.ctrl_type is ControlType.CARTESIAN:
@@ -143,7 +127,7 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
         else:
             raise ValueError(
                 f"Unsupported control type: {env.ctrl_type}. "
-                "Supported types are 'cartesian' and 'joint'."
+                "Supported types are 'cartesian' and 'joint' for delta actions."
             )
 
         obs, *_ = env.step(action, block=False)

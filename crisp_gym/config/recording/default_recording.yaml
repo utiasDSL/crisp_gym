@@ -1,0 +1,15 @@
+# Default recording manager configuration
+# This is an example configuration file showing all available parameters
+
+# Dataset configuration
+repo_id: "example_dataset"
+robot_type: "Franka"
+resume: false
+fps: 30
+num_episodes: 3
+push_to_hub: false
+
+# System configuration
+use_sound: true
+queue_size: 16
+writer_timeout: 10.0

@@ -566,8 +566,6 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         assert action.shape == self.action_space.shape, (
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
-        # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
-        # target_joint = (self.robot.target_joint + action[:, self.num_joints] + np.pi) % (2 * np.pi) - np.pi
         target_joint = self.robot.target_joint + action[: self.num_joints]
 
         self.robot.set_target_joint(target_joint)
