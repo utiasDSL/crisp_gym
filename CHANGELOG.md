@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.0](https://github.com/utiasDSL/crisp_gym/compare/v3.0.0...v3.1.0) (2025-10-09)
+
+
+### Features
+
+* Recording manager config (cleaning it up) + new config examples for environments ([#26](https://github.com/utiasDSL/crisp_gym/issues/26)) ([64b8a9a](https://github.com/utiasDSL/crisp_gym/commit/64b8a9a2d42c0437b597754f2544147d66ed936f))
+
 ## [3.0.0](https://github.com/utiasDSL/crisp_gym/compare/v2.0.3...v3.0.0) (2025-09-29)
 
 
