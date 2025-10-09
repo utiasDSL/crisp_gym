@@ -1,6 +1,6 @@
 """Example of receiving observation data via iceoryx."""
 
-# WARNING: This is a protyping script and not meant for usage for now.
+# WARNING: This is a prototyping script and not meant for usage for now.
 import logging
 import time
 
