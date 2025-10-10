@@ -77,7 +77,9 @@ class ManipulatorEnvConfig(ABC):
             gripper_cfg = data["gripper_config"]
             if "from_yaml" in gripper_cfg:
                 # Load from external YAML file
-                gripper_yaml_path = find_config(gripper_cfg["from_yaml"])
+                gripper_yaml_path = find_config(gripper_cfg["from_yaml"]) or find_config(
+                    "grippers/" + gripper_cfg["from_yaml"]
+                )
                 if gripper_yaml_path is None:
                     raise FileNotFoundError(
                         f"Gripper config file '{gripper_cfg['from_yaml']}' not found in any CRISP config paths"
@@ -253,7 +255,7 @@ class RightAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
             path=(
-                find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml"
+                find_config("gripper_right.yaml") or find_config("grippers/gripper_right.yaml")
             ).resolve()
         )
     )
