@@ -2,11 +2,11 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
 # Path to your local dataset root
 
-local_dataset_path = "/home/johannes/.cache/huggingface/lerobot/JohannesSaut/insert_lego_eval" 
+local_dataset_path = "/home/johannes/.cache/huggingface/lerobot/JohannesSaut/insert_lego_2" 
 
 # The repo id you want to push to (format: "username/dataset_name")
 
-repo_id = "JohannesSaut/insert_lego_eval"
+repo_id = "JohannesSaut/insert_lego_2"
 
 
 
