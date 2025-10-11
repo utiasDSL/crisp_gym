@@ -265,11 +265,15 @@ class ManipulatorBaseEnv(gym.Env):
         Returns:
             dict: A dictionary mapping ROS2 topics to observation feature names.
         """
+        # TODO: do not use private members
+        # TODO: use a different aproach to get this mapping
+
         topic_to_feature = {}
 
-        # TODO: do not use private members
         topic_to_feature[self.robot._joint_subscriber.topic_name] = "observation.state.joint"
         topic_to_feature[self.robot._pose_subscriber.topic_name] = "observation.state.cartesian"
+        topic_to_feature[self.robot._target_pose_publisher.topic_name] = "observation.state.target"
+
         if self.config.gripper_enabled:
             topic_to_feature[self.gripper._joint_subscriber.topic_name] = (
                 "observation.state.gripper"

@@ -76,9 +76,13 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    mcap_folder = args.mcap_folder
+    mcap_folder = Path(args.mcap_folder)
+    assert mcap_folder.exists(), f"Folder with mcap files {mcap_folder} does not exist."
+    mcap_files = list(mcap_folder.glob("*.mcap"))
+    assert len(mcap_files) > 0, f"No MCAP files found in folder {mcap_folder}."
+
     repo_id = args.repo_id
-    fps = args.fps or get_fps_from_recording(mcap_folder)
+    fps = args.fps or get_fps_from_recording(mcap_file=mcap_files[0])
 
     env_name = args.env_name
     if args.env_name is None:
@@ -96,17 +100,19 @@ if __name__ == "__main__":
         )
 
     env = make_env(env_name, namespace=namespace)
-
-    dataset = LeRobotDataset.create(
-        repo_id=repo_id,
-        features=get_features(env, ignore_keys=["observation.state"]),
-        fps=fps,
-        use_videos=True,
-    )
+    dataset = None
 
     try:
+        dataset = LeRobotDataset.create(
+            repo_id=repo_id,
+            features=get_features(env, ignore_keys=["observation.state"]),
+            fps=fps,
+            use_videos=True,
+        )
+
         convert_mcap_folder_to_lerobot_dataset(env=env, mcap_folder=mcap_folder, dataset=dataset)
     except Exception as e:
         print(f"Error during conversion: {e}")
         env.close()
-    dataset.push_to_hub()
+        if dataset is not None:
+            dataset.push_to_hub()
