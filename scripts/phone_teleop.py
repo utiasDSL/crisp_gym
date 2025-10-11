@@ -7,7 +7,6 @@ import time
 import numpy as np
 
 from crisp_gym.manipulator_env import make_env
-from crisp_gym.teleop.teleop_robot import make_leader
 from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
 from crisp_gym.util.setup_logger import setup_logging
 

@@ -44,6 +44,7 @@ class RecordingManager(ABC):
 
         Args:
             config: RecordingManagerConfig instance. If provided, other parameters are ignored.
+            topics_to_record: List of ROS2 topic names to record if bag recording is enabled.
             **kwargs: Individual parameters for backwards compatibility.
         """
         if not rclpy.ok():
@@ -588,6 +589,7 @@ def make_recording_manager(
         recording_manager_type: Type of recording manager to create.
         config: RecordingManagerConfig instance. Takes precedence over config_path.
         config_path: Path to YAML config file to load.
+        topics_to_record: List of ROS2 topic names to record if bag recording is enabled.
         **kwargs: Additional arguments to override config values or for backwards compatibility.
 
     Returns:

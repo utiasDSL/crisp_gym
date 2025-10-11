@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 def get_features(
     env: ManipulatorBaseEnv,
     use_video: bool = True,
-    ignore_keys: list[str] = None,
+    ignore_keys: list[str] | None = None,
 ) -> Dict[str, Dict]:
     """Get the features used by LeRobotDataset.
 
@@ -40,6 +40,9 @@ def get_features(
         use_video (bool): Whether to include video features. Defaults to True.
         ignore_keys (list[str], optional): List of observation keys to ignore. Defaults to None.
     """
+    if ignore_keys is None:
+        ignore_keys = []
+
     if not CODEBASE_VERSION.startswith("v2"):
         logger.warning(
             "Feature generation for LeRobot has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
@@ -68,7 +71,7 @@ def get_features(
     state_feature_names = []
 
     for feature_key in env.observation_space.keys():
-        if ignore_keys and feature_key in ignore_keys:
+        if feature_key in ignore_keys:
             continue
 
         if feature_key.startswith("observation.state"):
@@ -138,9 +141,11 @@ def get_features(
             "For now, they only support images with the same resolution. "
             "Please ensure all images have the same resolution."
         )
-    features["observation.state"] = construct_state_feature(
-        state_feature_length, state_feature_names
-    )
+
+    if "observation.state" not in ignore_keys:
+        features["observation.state"] = construct_state_feature(
+            state_feature_length, state_feature_names
+        )
 
     # Action
     features["action"] = {

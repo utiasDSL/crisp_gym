@@ -76,7 +76,7 @@ ros-jazzy-rmw-cyclonedds-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-crisp_python = { path = "../crisp_py", editable = true }
+crisp_python = { path = "../crisp_py", editable = false }
 mcap = ">=1.3.0"
 mcap-ros2-support = "*"
 
