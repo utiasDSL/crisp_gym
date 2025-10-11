@@ -483,7 +483,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         return obs
 
     @override
-    def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
+    def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
 
         Args:
@@ -576,7 +576,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         return obs
 
     @override
-    def step(self, action: np.ndarray, block: bool = True) -> Tuple[dict, float, bool, bool, dict]:
+    def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Joint action.
 
         Args:
@@ -603,6 +603,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[-1])
 
         if block:
+            # TODO: This is not ideal, we mainly block outside of the step function. Consider removing this.
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)
