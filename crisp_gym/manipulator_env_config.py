@@ -5,11 +5,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
+import numpy as np
 import yaml
 from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
 from crisp_py.robot_config import FrankaConfig, RobotConfig, make_robot_config
 from crisp_py.sensors.sensor_config import SensorConfig, make_sensor_config
+from crisp_py.utils.geometry import OrientationRepresentation
 
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
 
@@ -49,7 +51,67 @@ class ManipulatorEnvConfig(ABC):
     gripper_enabled: bool = True
     gripper_continuous_control: bool = False
 
+    orientation_representation: OrientationRepresentation = OrientationRepresentation.EULER
+
+    # Safety limits
+    min_x_height: None | float = None
+    min_y_height: None | float = None
+    min_z_height: None | float = 0.0  # e.g., table height
+    max_x_height: None | float = None
+    max_y_height: None | float = None
+    max_z_height: None | float = None
+
+    # NOTE: unused for now
     max_episode_steps: int | None = None
+
+    def __post_init__(self):
+        """Post-initialization checks and setups."""
+        if self.control_frequency <= 0:
+            raise ValueError("control_frequency must be positive")
+
+        if self.gripper_enabled and self.gripper_config is None:
+            raise ValueError("gripper_config must be provided if gripper_enabled is True")
+
+        if not self.gripper_enabled and self.gripper_config is not None:
+            raise ValueError("gripper_config must be None if gripper_enabled is False")
+
+        if (
+            self.cartesian_control_param_config is not None
+            and not self.cartesian_control_param_config.exists()
+        ):
+            raise FileNotFoundError(
+                f"Cartesian control param config file not found: {self.cartesian_control_param_config}"
+            )
+
+        if (
+            self.joint_control_param_config is not None
+            and not self.joint_control_param_config.exists()
+        ):
+            raise FileNotFoundError(
+                f"Joint control param config file not found: {self.joint_control_param_config}"
+            )
+
+        if self.orientation_representation not in [OrientationRepresentation.EULER]:
+            raise NotImplementedError(
+                f"Only Euler representation is supported for now. Got {self.orientation_representation}"
+            )
+
+        self.safety_box = {
+            "lower": np.array(
+                [
+                    self.min_x_height or -float("inf"),
+                    self.min_y_height or -float("inf"),
+                    self.min_z_height or -float("inf"),
+                ]
+            ),
+            "upper": np.array(
+                [
+                    self.max_x_height or float("inf"),
+                    self.max_y_height or float("inf"),
+                    self.max_z_height or float("inf"),
+                ]
+            ),
+        }
 
     @classmethod
     def from_yaml(cls, yaml_path: Path, **overrides) -> "ManipulatorEnvConfig":  # noqa: ANN003

@@ -35,6 +35,7 @@ from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
 from crisp_py.sensors.sensor import make_sensor
+from crisp_py.utils.geometry import OrientationRepresentation
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
@@ -102,6 +103,7 @@ class ManipulatorBaseEnv(gym.Env):
                 "All cameras must have a resolution defined in the configuration file."
             )
 
+        # TODO: allow other orientation representations
         self.observation_space = gym.spaces.Dict(
             {
                 **{
@@ -266,7 +268,6 @@ class ManipulatorBaseEnv(gym.Env):
         topic_to_feature = {}
 
         # TODO: do not use private members
-
         topic_to_feature[self.robot._joint_subscriber.topic_name] = "observation.state.joint"
         topic_to_feature[self.robot._pose_subscriber.topic_name] = "observation.state.cartesian"
         if self.config.gripper_enabled:
@@ -436,9 +437,6 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.ctrl_type = ControlType.CARTESIAN
 
-        # TODO: Make this configurable
-        self._min_z_height = 0.0
-
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
                 **self.observation_space.spaces,
@@ -482,6 +480,45 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         )
         return obs
 
+    def action_to_rotation(self, rot_action: np.ndarray) -> Rotation:
+        """Convert the rotation part of the action to a Rotation object.
+
+        Args:
+            rot_action (np.ndarray): Rotation action for the environment. Dimension depends on the chosen orientation representation.
+
+        Returns:
+            Rotation: A scipy Rotation object representing the rotation.
+        """
+        if self.config.orientation_representation == OrientationRepresentation.EULER:
+            return Rotation.from_euler("xyz", rot_action)
+        elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
+            return Rotation.from_quat(rot_action)
+        elif self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS:
+            return Rotation.from_rotvec(rot_action)
+        else:
+            raise ValueError(
+                f"Unsupported orientation representation: {self.config.orientation_representation}"
+            )
+
+    def clip_position_for_safety(self, position: np.ndarray) -> np.ndarray:
+        """Clip the position to ensure safety.
+
+        Args:
+            position (np.ndarray): The position to be clipped.
+
+        Returns:
+            np.ndarray: The clipped position.
+        """
+        if self.config.safety_box is None:
+            return position
+
+        clipped_position = np.clip(
+            position,
+            self.config.safety_box["lower"],
+            self.config.safety_box["upper"],
+        )
+        return clipped_position
+
     @override
     def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
         """Step the environment with a Cartesian action.
@@ -498,10 +535,12 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         )
         # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
 
-        translation, rotation = action[:3], Rotation.from_euler("xyz", action[3:6])
+        translation = action[:3]
+        rotation = self.action_to_rotation(action[3:6])
 
-        target_position = self.robot.target_pose.position + translation
-        target_position[2] = max(target_position[2], self._min_z_height)
+        target_position = self.clip_position_for_safety(
+            self.robot.target_pose.position + translation
+        )
         target_orientation = rotation * self.robot.target_pose.orientation
 
         target_pose = Pose(position=target_position, orientation=target_orientation)
