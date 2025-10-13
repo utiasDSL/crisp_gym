@@ -5,13 +5,13 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING
 
 import yaml
 from crisp_py.gripper import GripperConfig
 from crisp_py.robot_config import FrankaConfig, make_robot_config
 
-from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config
+from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
 
 if TYPE_CHECKING:
     from crisp_py.robot import RobotConfig
@@ -163,16 +163,12 @@ def make_leader_config(
     config_class = STRING_TO_CONFIG.get(name.lower())
     if config_class is None:
         # Try to find YAML config if not in predefined types
-        yaml_configs = discover_yaml_configs()
-        if name in yaml_configs:
-            config_path = yaml_configs[name]
-            # Default to base class for YAML-only configs
-            config_class = TeleopRobotConfig
-        else:
+        config_path = find_config("teleop/" + name.lower() + ".yaml")
+        if config_path is None:
             raise ValueError(
-                f"Unsupported leader robot type: {name}, available types are {list(STRING_TO_CONFIG.keys())} "
-                f"and discovered YAML configs: {list(yaml_configs.keys())}"
+                f"Unsupported leader robot type: {name}. The list of supported types are: {list_leader_configs()}"
             )
+        config_class = TeleopRobotConfig
 
     if config_path:
         config_path = Path(config_path) if isinstance(config_path, str) else config_path
@@ -181,37 +177,11 @@ def make_leader_config(
     return config_class(**overrides)
 
 
-def discover_yaml_configs(config_dirs: list[Path] | None = None) -> Dict[str, Path]:
-    """Auto-discover YAML configuration files from multiple directories.
-
-    Args:
-        config_dirs: Directories to search for YAML configs. Defaults to local crisp_gym/config/teleop
-                    and CRISP_CONFIG_PATH/teleop
-    Returns:
-        Dict mapping config names (without .yaml extension) to their file paths
-    """
-    if config_dirs is None:
-        # Check both local crisp_gym configs and external CRISP configs
-        from pathlib import Path
-
-        local_config_dir = Path(__file__).parent.parent / "config" / "teleop"
-        config_dirs = [local_config_dir, CRISP_CONFIG_PATH / "teleop"]
-
-    discovered_configs = {}
-    for config_dir in config_dirs:
-        if config_dir.exists():
-            # Local configs take precedence over CRISP_CONFIG_PATH configs
-            for yaml_file in config_dir.glob("*.yaml"):
-                if yaml_file.stem not in discovered_configs:
-                    discovered_configs[yaml_file.stem] = yaml_file
-
-    return discovered_configs
-
-
 def list_leader_configs() -> list[str]:
     """List all available leader robot configurations."""
     predefined = list(STRING_TO_CONFIG.keys())
-    yaml_configs = list(discover_yaml_configs().keys())
+    other = list_configs_in_folder("teleop")
+    yaml_configs = [file.stem for file in other if file.suffix == ".yaml"]
     return predefined + yaml_configs
 
 

@@ -60,3 +60,21 @@ def find_config(filename: str) -> Path | None:
         if file_path.exists():
             return file_path
     return None
+
+
+def list_configs_in_folder(folder: str) -> List[Path]:
+    """List all config files in a given folder across all CRISP config paths.
+
+    Args:
+        folder: Name of the folder to search within each config path
+    Returns:
+        List of Paths to config files found in the specified folder
+    """
+    found_files = []
+    for config_path in CRISP_CONFIG_PATHS:
+        folder_path = config_path / folder
+        if folder_path.exists() and folder_path.is_dir():
+            for file in folder_path.iterdir():
+                if file.is_file():
+                    found_files.append(file)
+    return found_files
