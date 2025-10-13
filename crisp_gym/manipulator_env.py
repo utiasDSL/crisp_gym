@@ -41,6 +41,11 @@ from typing_extensions import override
 
 from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
+from crisp_gym.util.gripper_mode import (
+    GripperMode,
+    max_action_for_gripper_mode,
+    min_action_for_gripper_mode,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +134,8 @@ class ManipulatorBaseEnv(gym.Env):
                 ),
                 # Gripper state
                 "observation.state.gripper": gym.spaces.Box(
-                    low=np.array([0.0], dtype=np.float32),  # Gripper closed
-                    high=np.array([1.0], dtype=np.float32),  # Gripper open
+                    low=np.array([0.0], dtype=np.float32),
+                    high=np.array([1.0], dtype=np.float32),
                     dtype=np.float32,
                 ),
                 # Joint state
@@ -195,7 +200,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.robot.wait_until_ready(timeout=3)
 
-        if self.config.gripper_enabled:
+        if self.config.gripper_mode != GripperMode.NONE:
             self.gripper.wait_until_ready(timeout=3)
 
         for camera in self.cameras:
@@ -235,7 +240,9 @@ class ManipulatorBaseEnv(gym.Env):
             axis=0,
         )
         gripper_value = (
-            1 - np.array([self.gripper.value]) if self.config.gripper_enabled else np.array([0.0])
+            1 - np.array([self.gripper.value])
+            if self.config.gripper_mode != GripperMode.NONE
+            else np.array([0.0])
         )
 
         # Cartesian pose
@@ -263,21 +270,30 @@ class ManipulatorBaseEnv(gym.Env):
         Args:
             action (float): Action value for the gripper (0,1).
         """
-        if not self.config.gripper_enabled:
+        if self.config.gripper_mode == GripperMode.NONE:
             return
-
-        if self.config.gripper_continuous_control:
-            # If continuous control is enabled, set the gripper value directly
-            self.gripper.set_target(action)
-        else:
-            if action >= self.config.gripper_threshold and self.gripper.is_open(
+        elif self.config.gripper_mode == GripperMode.ABSOLUTE_BINARY:
+            if action < self.config.gripper_threshold and self.gripper.is_open(
                 open_threshold=self.config.gripper_threshold
             ):
                 self.gripper.close()
-            elif action < self.config.gripper_threshold and not self.gripper.is_open(
+            elif action >= self.config.gripper_threshold and not self.gripper.is_open(
                 open_threshold=self.config.gripper_threshold
             ):
                 self.gripper.open()
+        elif self.config.gripper_mode == GripperMode.RELATIVE_BINARY:
+            if action < 0 and self.gripper.is_open(open_threshold=self.config.gripper_threshold):
+                self.gripper.close()
+            elif action > 0 and not self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.open()
+        elif self.config.gripper_mode == GripperMode.ABSOLUTE_CONTINUOUS:
+            self.gripper.set_target(action)
+        elif self.config.gripper_mode == GripperMode.RELATIVE_CONTINUOUS:
+            self.gripper.set_target(np.clip(self.gripper.value + action, 0.0, 1.0))
+        else:
+            raise ValueError(f"Unsupported gripper mode: {self.config.gripper_mode}")
 
     @override
     def step(self, action: np.ndarray, block: bool = False) -> Tuple[dict, float, bool, bool, dict]:
@@ -351,7 +367,7 @@ class ManipulatorBaseEnv(gym.Env):
             home_config (list[float]): Optional home configuration for the robot.
             blocking (bool): If True, wait until the robot reaches the home position.
         """
-        if self.config.gripper_enabled:
+        if self.config.gripper_mode != GripperMode.NONE:
             self.gripper.open()
         self.robot.home(home_config=home_config, blocking=blocking)
 
@@ -359,13 +375,16 @@ class ManipulatorBaseEnv(gym.Env):
             self.switch_to_default_controller()
 
     def move_to(
-        self, position: List | NDArray | None = None, pose: Pose | None = None, speed: float = 0.05
+        self,
+        position: List | NDArray | None = None,
+        pose: List | NDArray | None = None,
+        speed: float = 0.05,
     ):
         """Move the robot to a specified position or pose.
 
         Args:
             position (iter): Optional position to move to [x, y, z].
-            pose (iter): Optional pose (translation and rotation) to move to.
+            pose (iter): Optional pose (rotation in euler angles xyz) to move to.
             speed (float): Speed of the movement.
         """
         if self.ctrl_type is ControlType.UNDEFINED:
@@ -375,13 +394,13 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.switch_controller(ControlType.CARTESIAN)
 
-        if pose:
+        if pose is not None:
             pose = Pose(
                 position=np.array(position), orientation=Rotation.from_euler("xyz", np.array(pose))
             )
             position = None
 
-        if self.config.gripper_enabled:
+        if self.config.gripper_mode != GripperMode.NONE:
             self.gripper.open()
         self.robot.move_to(position=position, pose=pose, speed=speed)
 
@@ -425,7 +444,9 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 [
                     -np.ones((3,), dtype=np.float32),  # Translation limits [-1, -1, -1]
                     -np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [-pi, -pi, -pi]
-                    np.zeros((1,), dtype=np.float32),  # Gripper action (0 = close)
+                    np.array(
+                        [min_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
@@ -433,7 +454,9 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 [
                     np.ones((3,), dtype=np.float32),  # Translation limits [1, 1, 1]
                     np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [pi, pi, pi]
-                    np.ones((1,), dtype=np.float32),  # Gripper action (1 = open)
+                    np.array(
+                        [max_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
@@ -478,7 +501,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         target_pose = Pose(position=target_position, orientation=target_orientation)
         self.robot.set_target(pose=target_pose)
 
-        if self.config.gripper_enabled:
+        if self.config.gripper_mode != GripperMode.NONE:
             self._set_gripper_action(action[-1])
 
         if block:
@@ -526,14 +549,18 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             low=np.concatenate(
                 [
                     np.ones((self.num_joints,), dtype=np.float32) * -np.pi,  # Joint limits
-                    np.zeros((1,), dtype=np.float32),  # Gripper action (0 = close)
+                    np.array(
+                        [min_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
             high=np.concatenate(
                 [
                     np.ones((self.num_joints,), dtype=np.float32) * np.pi,  # Joint limits
-                    np.ones((1,), dtype=np.float32),  # Gripper action (1 = open)
+                    np.array(
+                        [max_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
@@ -570,7 +597,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
 
         self.robot.set_target_joint(target_joint)
 
-        if self.config.gripper_enabled:
+        if self.config.gripper_mode != GripperMode.NONE:
             self._set_gripper_action(action[-1])
 
         if block:

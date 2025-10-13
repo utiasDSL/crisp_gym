@@ -1,5 +1,6 @@
 """General manipulator environment configs."""
 
+import logging
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +13,7 @@ from crisp_py.robot_config import FrankaConfig, RobotConfig, make_robot_config
 from crisp_py.sensors.sensor_config import SensorConfig, make_sensor_config
 
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
+from crisp_gym.util.gripper_mode import GripperMode
 
 
 @dataclass(kw_only=True)
@@ -31,7 +33,6 @@ class ManipulatorEnvConfig(ABC):
         joint_control_param_config (Path | None): Path to the joint control parameters configuration file.
         gripper_threshold (float): Threshold for gripper actions.
         gripper_enabled (bool): Whether the gripper is enabled.
-        gripper_continuous_control (bool): Whether the gripper supports continuous control.
         max_episode_steps (int | None): Maximum number of steps per episode, if applicable.
     """
 
@@ -45,11 +46,18 @@ class ManipulatorEnvConfig(ABC):
 
     sensor_configs: List[SensorConfig] = field(default_factory=lambda: [])
 
+    gripper_mode: GripperMode = GripperMode.ABSOLUTE_CONTINUOUS
+    gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_threshold: float = 0.1
-    gripper_enabled: bool = True
-    gripper_continuous_control: bool = False
 
     max_episode_steps: int | None = None
+
+    def __post_init__(self):
+        """Post-initialization checks."""
+        if self.gripper_enabled is not None:
+            logging.warning(
+                "Deprecated: 'gripper_enabled' is deprecated, use 'gripper_mode' instead to set the control mode."
+            )
 
     @classmethod
     def from_yaml(cls, yaml_path: Path, **overrides) -> "ManipulatorEnvConfig":  # noqa: ANN003
