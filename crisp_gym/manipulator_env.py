@@ -434,7 +434,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 [
                     -np.ones((3,), dtype=np.float32),  # Translation limits [-1, -1, -1]
                     -np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [-pi, -pi, -pi]
-                    -np.ones((1,), dtype=np.float32) # Gripper relative action: -1 = close
+                    -np.ones((1,), dtype=np.float32), # Gripper relative action: -1 = close
                     if self.config.gripper_enabled and not self.config.gripper_config.absolute_actions else np.zeros((1,), dtype=np.float32)  # Gripper absolute action (0 = close)
                 ],
                 axis=0,
