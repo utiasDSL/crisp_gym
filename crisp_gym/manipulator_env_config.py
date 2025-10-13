@@ -50,6 +50,8 @@ class ManipulatorEnvConfig(ABC):
     gripper_continuous_control: bool = False
 
     max_episode_steps: int | None = None
+    gripper_absolute: bool = True
+
 
     @classmethod
     def from_yaml(cls, yaml_path: Path, **overrides) -> "ManipulatorEnvConfig":  # noqa: ANN003
@@ -327,7 +329,7 @@ def discover_yaml_configs(config_dirs: list[Path] | None = None) -> Dict[str, Pa
     if config_dirs is None:
         # Check both local crisp_gym configs and external CRISP configs
         from pathlib import Path
-
+        
         local_config_dir = Path(__file__).parent / "config" / "envs"
         config_dirs = [local_config_dir, CRISP_CONFIG_PATH / "envs"]
 

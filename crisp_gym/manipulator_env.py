@@ -269,12 +269,21 @@ class ManipulatorBaseEnv(gym.Env):
         if self.config.gripper_continuous_control:
             # If continuous control is enabled, set the gripper value directly
             self.gripper.set_target(action)
-        else:
-            if action >= self.config.gripper_threshold and self.gripper.is_open(
+        elif self.config.gripper_config.absolute_actions:
+            if action < self.config.gripper_threshold and self.gripper.is_open(
                 open_threshold=self.config.gripper_threshold
             ):
                 self.gripper.close()
-            elif action < self.config.gripper_threshold and not self.gripper.is_open(
+            elif action >= self.config.gripper_threshold and not self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.open()
+        else:
+            if action < 0 and self.gripper.is_open(
+                open_threshold=self.config.gripper_threshold
+            ):
+                self.gripper.close()
+            elif action > 0 and not self.gripper.is_open(
                 open_threshold=self.config.gripper_threshold
             ):
                 self.gripper.open()
@@ -359,13 +368,13 @@ class ManipulatorBaseEnv(gym.Env):
             self.switch_to_default_controller()
 
     def move_to(
-        self, position: List | NDArray | None = None, pose: Pose | None = None, speed: float = 0.05
+        self, position: List | NDArray | None = None, pose: List | NDArray | None = None, speed: float = 0.05
     ):
         """Move the robot to a specified position or pose.
 
         Args:
             position (iter): Optional position to move to [x, y, z].
-            pose (iter): Optional pose (translation and rotation) to move to.
+            pose (iter): Optional pose (rotation in euler angles xyz) to move to.
             speed (float): Speed of the movement.
         """
         if self.ctrl_type is ControlType.UNDEFINED:
@@ -375,7 +384,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         self.switch_controller(ControlType.CARTESIAN)
 
-        if pose:
+        if pose is not None:
             pose = Pose(
                 position=np.array(position), orientation=Rotation.from_euler("xyz", np.array(pose))
             )
@@ -425,7 +434,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 [
                     -np.ones((3,), dtype=np.float32),  # Translation limits [-1, -1, -1]
                     -np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [-pi, -pi, -pi]
-                    np.zeros((1,), dtype=np.float32),  # Gripper action (0 = close)
+                    -np.ones((1,), dtype=np.float32) # Gripper relative action: -1 = close
+                    if self.config.gripper_enabled and not self.config.gripper_config.absolute_actions else np.zeros((1,), dtype=np.float32)  # Gripper absolute action (0 = close)
                 ],
                 axis=0,
             ),
