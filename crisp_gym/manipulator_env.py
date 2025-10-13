@@ -295,7 +295,7 @@ class ManipulatorBaseEnv(gym.Env):
         elif self.config.gripper_mode == GripperMode.ABSOLUTE_CONTINUOUS:
             self.gripper.set_target(action)
         elif self.config.gripper_mode == GripperMode.RELATIVE_CONTINUOUS:
-            self.gripper.set_target(self.gripper.value + action)
+            self.gripper.set_target(np.clip(self.gripper.value + action, 0.0, 1.0))
         else:
             raise ValueError(f"Unsupported gripper mode: {self.config.gripper_mode}")
 
