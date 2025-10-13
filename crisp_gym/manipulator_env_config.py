@@ -46,7 +46,7 @@ class ManipulatorEnvConfig(ABC):
 
     sensor_configs: List[SensorConfig] = field(default_factory=lambda: [])
 
-    gripper_mode: GripperMode = GripperMode.ABSOLUTE
+    gripper_mode: GripperMode = GripperMode.ABSOLUTE_CONTINUOUS
     gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_threshold: float = 0.1
 
