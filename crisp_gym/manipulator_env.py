@@ -134,12 +134,8 @@ class ManipulatorBaseEnv(gym.Env):
                 ),
                 # Gripper state
                 "observation.state.gripper": gym.spaces.Box(
-                    low=np.array(
-                        [min_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
-                    ),
-                    high=np.array(
-                        [max_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
-                    ),
+                    low=np.array([0.0], dtype=np.float32),
+                    high=np.array([1.0], dtype=np.float32),
                     dtype=np.float32,
                 ),
                 # Joint state
@@ -448,7 +444,9 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 [
                     -np.ones((3,), dtype=np.float32),  # Translation limits [-1, -1, -1]
                     -np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [-pi, -pi, -pi]
-                    -np.ones((1,), dtype=np.float32),  # Gripper relative action: -1 = close
+                    np.array(
+                        [min_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
@@ -456,7 +454,9 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 [
                     np.ones((3,), dtype=np.float32),  # Translation limits [1, 1, 1]
                     np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [pi, pi, pi]
-                    np.ones((1,), dtype=np.float32),  # Gripper action (1 = open)
+                    np.array(
+                        [max_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
@@ -549,14 +549,18 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             low=np.concatenate(
                 [
                     np.ones((self.num_joints,), dtype=np.float32) * -np.pi,  # Joint limits
-                    np.zeros((1,), dtype=np.float32),  # Gripper action (0 = close)
+                    np.array(
+                        [min_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
             high=np.concatenate(
                 [
                     np.ones((self.num_joints,), dtype=np.float32) * np.pi,  # Joint limits
-                    np.ones((1,), dtype=np.float32),  # Gripper action (1 = open)
+                    np.array(
+                        [max_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
+                    ),
                 ],
                 axis=0,
             ),
