@@ -23,6 +23,16 @@ from crisp_gym.manipulator_env import ManipulatorBaseEnv, make_env
 from crisp_gym.util.lerobot_features import get_features
 
 
+def combine_actions(actions: list[np.ndarray], axis: int = 0) -> np.ndarray:
+    """Combine multiple action arrays into a single action array."""
+    action_pose = np.zeros((6,), dtype=np.float32)
+    action_gripper = 0.0
+    for action in actions:
+        action_pose += action[:6]
+        action_gripper = action[-1]  # Use the last gripper value
+    return np.concatenate([action_pose, [action_gripper]], axis=axis)
+
+
 def ros_msg_to_observation(env, msg) -> np.ndarray:  # noqa: ANN001
     """Convert a ROS message to an observation."""
     if "camera" in msg.channel.topic:
@@ -34,8 +44,20 @@ def ros_msg_to_observation(env, msg) -> np.ndarray:  # noqa: ANN001
             .astype(np.float32)
         )
         return obs
+    if "wrench" in msg.channel.topic:
+        return np.array(
+            [
+                msg.ros_msg.wrench.force.x,
+                msg.ros_msg.wrench.force.y,
+                msg.ros_msg.wrench.force.z,
+                msg.ros_msg.wrench.torque.x,
+                msg.ros_msg.wrench.torque.y,
+                msg.ros_msg.wrench.torque.z,
+            ],
+            dtype=np.float32,
+        )
     if "joint_states" in msg.channel.topic and "gripper" not in msg.channel.topic:
-        return env.robot.ros_msg_to_joint(msg.ros_msg)
+        return env.robot.ros_msg_to_joint(msg.ros_msg).astype(np.float32)
     if "action" in msg.channel.topic:
         return np.array(msg.ros_msg.data, dtype=np.float32)
     if "gripper" in msg.channel.topic:
@@ -112,6 +134,21 @@ def convert_mcap_file_to_lerobot_episode(
 
     message_count = get_message_count(mcap_file)
 
+    actual_fps = get_fps_from_recording(mcap_file)
+
+    if actual_fps != dataset.fps:
+        print(
+            f"[yellow]Warning:[/yellow] The FPS of the dataset ({dataset.fps}) does not match the estimated FPS from the recording ({actual_fps})."
+        )
+        print("Actions will be combined to match the dataset FPS.")
+
+    fps_ratio = actual_fps / dataset.fps
+    if fps_ratio < 1.0:
+        raise ValueError(
+            f"The dataset FPS ({dataset.fps}) cannot be higher than the recording FPS ({actual_fps})."
+        )
+    action_buffer = []
+
     for msg in track(
         read_ros2_messages(source=mcap_file, topics=[*topics_to_features.keys()]),
         total=message_count,
@@ -119,6 +156,14 @@ def convert_mcap_file_to_lerobot_episode(
     ):
         latest_observation[topics_to_features[msg.channel.topic]] = ros_msg_to_observation(env, msg)
         if "action" in msg.channel.topic:
+            if actual_fps != dataset.fps:
+                action_buffer.append(latest_observation["action"])
+                if len(action_buffer) >= fps_ratio:
+                    combined_action = combine_actions(action_buffer, axis=0)
+                    latest_observation["action"] = combined_action
+                    action_buffer = []
+                else:
+                    continue
             if any([observation is None for observation in latest_observation.values()]):
                 continue
             dataset.add_frame(latest_observation, task="random")

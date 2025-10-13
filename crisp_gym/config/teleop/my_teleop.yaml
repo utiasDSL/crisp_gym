@@ -2,9 +2,7 @@ leader:
   robot_type: franka
 
 leader_gripper:
-  min_value: 0.0
-  max_value: 1.0
-  joint_state_topic: /left/trigger/trigger_state_broadcaster/joint_states
+  from_yaml: trigger_left.yaml
 
 gravity_compensation_controller: control/gravity_compensation.yaml
 
