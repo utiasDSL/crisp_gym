@@ -1,5 +1,6 @@
 """General manipulator environment configs."""
 
+import logging
 from abc import ABC
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -12,6 +13,7 @@ from crisp_py.robot_config import FrankaConfig, RobotConfig, make_robot_config
 from crisp_py.sensors.sensor_config import SensorConfig, make_sensor_config
 
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config
+from crisp_gym.util.gripper_mode import GripperMode
 
 
 @dataclass(kw_only=True)
@@ -31,7 +33,6 @@ class ManipulatorEnvConfig(ABC):
         joint_control_param_config (Path | None): Path to the joint control parameters configuration file.
         gripper_threshold (float): Threshold for gripper actions.
         gripper_enabled (bool): Whether the gripper is enabled.
-        gripper_continuous_control (bool): Whether the gripper supports continuous control.
         max_episode_steps (int | None): Maximum number of steps per episode, if applicable.
     """
 
@@ -45,13 +46,18 @@ class ManipulatorEnvConfig(ABC):
 
     sensor_configs: List[SensorConfig] = field(default_factory=lambda: [])
 
+    gripper_mode: GripperMode = GripperMode.ABSOLUTE
+    gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_threshold: float = 0.1
-    gripper_enabled: bool = True
-    gripper_continuous_control: bool = False
 
     max_episode_steps: int | None = None
-    gripper_absolute: bool = True
 
+    def __post_init__(self):
+        """Post-initialization checks."""
+        if self.gripper_enabled is not None:
+            logging.warning(
+                "Deprecated: 'gripper_enabled' is deprecated, use 'gripper_mode' instead to set the control mode."
+            )
 
     @classmethod
     def from_yaml(cls, yaml_path: Path, **overrides) -> "ManipulatorEnvConfig":  # noqa: ANN003
@@ -81,7 +87,9 @@ class ManipulatorEnvConfig(ABC):
                 # Load from external YAML file
                 gripper_yaml_path = find_config(gripper_cfg["from_yaml"])
                 if gripper_yaml_path is None:
-                    raise FileNotFoundError(f"Gripper config file '{gripper_cfg['from_yaml']}' not found in any CRISP config paths")
+                    raise FileNotFoundError(
+                        f"Gripper config file '{gripper_cfg['from_yaml']}' not found in any CRISP config paths"
+                    )
                 data["gripper_config"] = GripperConfig.from_yaml(path=gripper_yaml_path.resolve())
             else:
                 data["gripper_config"] = GripperConfig(**gripper_cfg)
@@ -112,10 +120,12 @@ class FrankaEnvConfig(ManipulatorEnvConfig, ABC):
 
     # Default controller configurations for Franka
     cartesian_control_param_config: Path | None = field(
-        default_factory=lambda: find_config("control/default_cartesian_impedance.yaml") or CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
+        default_factory=lambda: find_config("control/default_cartesian_impedance.yaml")
+        or CRISP_CONFIG_PATH / "control" / "default_cartesian_impedance.yaml"
     )
     joint_control_param_config: Path | None = field(
-        default_factory=lambda: find_config("control/joint_control.yaml") or CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
+        default_factory=lambda: find_config("control/joint_control.yaml")
+        or CRISP_CONFIG_PATH / "control" / "joint_control.yaml"
     )
 
 
@@ -141,7 +151,9 @@ class LeftNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml").resolve()
+            path=(
+                find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml"
+            ).resolve()
         )
     )
 
@@ -154,7 +166,9 @@ class RightNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml").resolve()
+            path=(
+                find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml"
+            ).resolve()
         )
     )
 
@@ -198,7 +212,9 @@ class AlohaFrankaEnvConfig(FrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_aloha.yaml") or CRISP_CONFIG_PATH / "gripper_aloha.yaml").resolve()
+            path=(
+                find_config("gripper_aloha.yaml") or CRISP_CONFIG_PATH / "gripper_aloha.yaml"
+            ).resolve()
         )
     )
     camera_configs: List[CameraConfig] = field(default_factory=lambda: [])
@@ -212,7 +228,9 @@ class LeftAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml").resolve()
+            path=(
+                find_config("gripper_left.yaml") or CRISP_CONFIG_PATH / "gripper_left.yaml"
+            ).resolve()
         )
     )
 
@@ -242,7 +260,9 @@ class RightAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
-            path=(find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml").resolve()
+            path=(
+                find_config("gripper_right.yaml") or CRISP_CONFIG_PATH / "gripper_right.yaml"
+            ).resolve()
         )
     )
 
@@ -329,7 +349,7 @@ def discover_yaml_configs(config_dirs: list[Path] | None = None) -> Dict[str, Pa
     if config_dirs is None:
         # Check both local crisp_gym configs and external CRISP configs
         from pathlib import Path
-        
+
         local_config_dir = Path(__file__).parent / "config" / "envs"
         config_dirs = [local_config_dir, CRISP_CONFIG_PATH / "envs"]
 
