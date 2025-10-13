@@ -269,7 +269,7 @@ class ManipulatorBaseEnv(gym.Env):
         if self.config.gripper_continuous_control:
             # If continuous control is enabled, set the gripper value directly
             self.gripper.set_target(action)
-        elif self.config.gripper_config.absolute_actions:
+        elif self.config.gripper_absolute:
             if action < self.config.gripper_threshold and self.gripper.is_open(
                 open_threshold=self.config.gripper_threshold
             ):
