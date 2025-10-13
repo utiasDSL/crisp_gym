@@ -15,6 +15,7 @@ from crisp_py.sensors.sensor_config import SensorConfig, make_sensor_config
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
 from crisp_gym.util.gripper_mode import GripperMode
 
+
 @dataclass(kw_only=True)
 class ManipulatorEnvConfig(ABC):
     """Manipulator Gym Environment Configuration.
