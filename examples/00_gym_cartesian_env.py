@@ -4,8 +4,6 @@ import numpy as np
 
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv
 from crisp_gym.manipulator_env_config import FrankaEnvConfig
-from crisp_py.gripper.gripper import GripperConfig
-from crisp_py.camera.camera import CameraConfig
 
 # %% === Circle Parameters ===
 RADIUS = 0.1  # [m]
@@ -14,30 +12,9 @@ CTRL_FREQ = 50  # control frequency in Hz
 SIN_FREQ = 0.25  # frequency of circular motion in Hz
 ITERATIONS = 5  # number of full circles to draw
 
-gripper_config = GripperConfig(
-    min_value=0.0,
-    max_value=1.0,
-    command_topic="/gripper/gripper_position_controller/commands",
-    joint_state_topic="/gripper/joint_states",
-    max_delta=10.0,
-)
-camera_configs = [
-    CameraConfig(
-        camera_name="primary",
-        camera_frame="primary_link",
-        resolution=(256, 256),
-        camera_color_image_topic="/camera/camera/color/image_rect_raw",
-        camera_color_info_topic="/camera/camera/color/camera_info",
-    )
-]
-
 # %% === Environment Setup ===
-env_config = FrankaEnvConfig(
-    control_frequency=CTRL_FREQ,
-    gripper_config=gripper_config,
-    camera_configs=camera_configs,
-)
-env = ManipulatorCartesianEnv(config=env_config)
+env_config = FrankaEnvConfig(control_frequency=CTRL_FREQ)
+env = ManipulatorCartesianEnv(namespace="right", config=env_config)
 
 # %% === Move to Starting Point ===
 start_position = CENTER + [0, RADIUS, 0]
