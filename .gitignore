@@ -1,6 +1,7 @@
 __pycache__
 .vscode
 .ros_env.sh
+trajectories/**
 
 # pixi environments
 .pixi

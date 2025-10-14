@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env, make_env_config
 from crisp_gym.manipulator_env_config import FrankaEnvConfig
 
 # %% === Circle Parameters ===
@@ -11,6 +11,7 @@ CENTER = np.array([0.4, 0.0, 0.4])
 CTRL_FREQ = 50  # control frequency in Hz
 SIN_FREQ = 0.25  # frequency of circular motion in Hz
 ITERATIONS = 5  # number of full circles to draw
+
 
 # %% === Environment Setup ===
 env_config = FrankaEnvConfig(control_frequency=CTRL_FREQ)
