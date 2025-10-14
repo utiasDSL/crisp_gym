@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.1](https://github.com/utiasDSL/crisp_gym/compare/v3.2.0...v3.2.1) (2025-10-14)
+
+
+### Bug Fixes
+
+* Add deprecation warning for old parameters ([a339dfe](https://github.com/utiasDSL/crisp_gym/commit/a339dfe3997855e41b4d31d52e3f623450d78eee))
+* gripper mode not properly initialized ([a7528e9](https://github.com/utiasDSL/crisp_gym/commit/a7528e9e7ee0816e208d096a8a83b649d5d29e78))
+
 ## [3.2.0](https://github.com/utiasDSL/crisp_gym/compare/v3.1.0...v3.2.0) (2025-10-13)
 
 
