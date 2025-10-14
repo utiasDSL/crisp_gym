@@ -23,6 +23,7 @@ def convert_mcap_folder_to_lerobot_dataset(
     env: ManipulatorBaseEnv,
     mcap_folder: Path | str,
     dataset: LeRobotDataset,
+    task: str | None = None,
 ):
     """Convert an MCAP file to LeRobot Dataset format and upload to Hugging Face Hub.
 
@@ -30,6 +31,7 @@ def convert_mcap_folder_to_lerobot_dataset(
         env (ManipulatorBaseEnv): Environment to use for defining features.
         mcap_folder (Path | str): Path to the MCAP folder.
         dataset (LeRobotDataset): LeRobotDataset instance to add episodes to.
+        task (str | None, optional): Task description for the episode. Defaults to None.
     """
     mcap_folder = Path(mcap_folder)
     assert mcap_folder.exists(), f"Folder with mcap files {mcap_folder} does not exist."
@@ -39,7 +41,12 @@ def convert_mcap_folder_to_lerobot_dataset(
     for mcap_file in track(
         mcap_files, description=f"Converting MCAP files in {mcap_folder} to LeRobot Dataset..."
     ):
-        convert_mcap_file_to_lerobot_episode(env=env, mcap_file=mcap_file, dataset=dataset)
+        convert_mcap_file_to_lerobot_episode(
+            env=env,
+            mcap_file=mcap_file,
+            dataset=dataset,
+            task=task,
+        )
 
 
 if __name__ == "__main__":
@@ -73,6 +80,12 @@ if __name__ == "__main__":
         type=int,
         default=None,
         help="FPS of the dataset. If not provided, it will be estimated from the /action topic in the MCAP file.",
+    )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default=None,
+        help="Task description for the episode.",
     )
     args = parser.parse_args()
 
@@ -110,7 +123,12 @@ if __name__ == "__main__":
             use_videos=True,
         )
 
-        convert_mcap_folder_to_lerobot_dataset(env=env, mcap_folder=mcap_folder, dataset=dataset)
+        convert_mcap_folder_to_lerobot_dataset(
+            env=env,
+            mcap_folder=mcap_folder,
+            dataset=dataset,
+            task=args.task,
+        )
     except Exception as e:
         print(f"Error during conversion: {e}")
         env.close()

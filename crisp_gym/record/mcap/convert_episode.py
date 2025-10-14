@@ -20,17 +20,11 @@ from rich import print
 from rich.progress import track
 
 from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, make_env
+from crisp_gym.record.mcap.hierarchiecal_action_combiner import (
+    HierarchiecalActionCombiner,
+    HierarchiechalActionTypeConfig,
+)
 from crisp_gym.util.lerobot_features import get_features
-
-
-def combine_actions(actions: list[np.ndarray], axis: int = 0) -> np.ndarray:
-    """Combine multiple action arrays into a single action array."""
-    action_pose = np.zeros((6,), dtype=np.float32)
-    action_gripper = 0.0
-    for action in actions:
-        action_pose += action[:6]
-        action_gripper = action[-1]  # Use the last gripper value
-    return np.concatenate([action_pose, [action_gripper]], axis=axis)
 
 
 def ros_msg_to_observation(env, msg) -> np.ndarray:  # noqa: ANN001
@@ -109,6 +103,7 @@ def convert_mcap_file_to_lerobot_episode(
     env: ManipulatorBaseEnv,
     dataset: LeRobotDataset,
     mcap_file: Path | str,
+    task: str | None = None,
 ):
     """Convert an MCAP file to LeRobot Dataset format and upload to Hugging Face Hub.
 
@@ -116,7 +111,9 @@ def convert_mcap_file_to_lerobot_episode(
         env (ManipulatorBaseEnv): Environment to use for defining features.
         mcap_file (str): Path to the MCAP file.
         dataset (LeRobotDataset): LeRobotDataset instance to add frames to.
+        task (str | None, optional): Task description for the episode. Defaults to None.
     """
+    task = task or "Task description not provided."
     mcap_file = Path(mcap_file)
     assert mcap_file.exists(), f"MCAP file {mcap_file} does not exist."
 
@@ -136,37 +133,37 @@ def convert_mcap_file_to_lerobot_episode(
 
     actual_fps = get_fps_from_recording(mcap_file)
 
-    if actual_fps != dataset.fps:
-        print(
-            f"[yellow]Warning:[/yellow] The FPS of the dataset ({dataset.fps}) does not match the estimated FPS from the recording ({actual_fps})."
-        )
-        print("Actions will be combined to match the dataset FPS.")
-
-    fps_ratio = actual_fps / dataset.fps
-    if fps_ratio < 1.0:
-        raise ValueError(
-            f"The dataset FPS ({dataset.fps}) cannot be higher than the recording FPS ({actual_fps})."
-        )
-    action_buffer = []
+    hierarchical_action_type_config = HierarchiechalActionTypeConfig(
+        low_fps=dataset.fps,
+        fast_fps=actual_fps,
+    )
+    hierarchical_action_combiner = HierarchiecalActionCombiner(
+        config=hierarchical_action_type_config
+    )
 
     for msg in track(
         read_ros2_messages(source=mcap_file, topics=[*topics_to_features.keys()]),
         total=message_count,
         description=f"Processing MCAP file {mcap_file} - repo {dataset.repo_id} - fps {dataset.fps}",
     ):
-        latest_observation[topics_to_features[msg.channel.topic]] = ros_msg_to_observation(env, msg)
         if "action" in msg.channel.topic:
-            if actual_fps != dataset.fps:
-                action_buffer.append(latest_observation["action"])
-                if len(action_buffer) >= fps_ratio:
-                    combined_action = combine_actions(action_buffer, axis=0)
-                    latest_observation["action"] = combined_action
-                    action_buffer = []
-                else:
-                    continue
+            latest_observation["action"] = ros_msg_to_observation(env, msg)
             if any([observation is None for observation in latest_observation.values()]):
                 continue
+
+            processed_action = hierarchical_action_combiner.create_combined_action_if_required(
+                latest_observation=latest_observation,
+                latest_action=latest_observation["action"],
+            )
+
+            if processed_action is None:
+                continue
+
+            latest_observation["action"] = processed_action
+
             dataset.add_frame(latest_observation, task="random")
+
+        latest_observation[topics_to_features[msg.channel.topic]] = ros_msg_to_observation(env, msg)
 
     dataset.save_episode()
 
@@ -205,6 +202,12 @@ if __name__ == "__main__":
         default=None,
         help="FPS of the dataset. If not provided, it will be estimated from the /action topic in the MCAP file.",
     )
+    parser.add_argument(
+        "--task",
+        type=str,
+        default=None,
+        help="Task description for the episode.",
+    )
     args = parser.parse_args()
 
     mcap_file = args.mcap_file
@@ -227,7 +230,7 @@ if __name__ == "__main__":
     )
 
     try:
-        convert_mcap_file_to_lerobot_episode(env, dataset, mcap_file)
+        convert_mcap_file_to_lerobot_episode(env, dataset, mcap_file, task=args.task)
     except Exception as e:
         env.close()
         raise e
