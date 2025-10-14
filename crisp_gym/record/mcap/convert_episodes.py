@@ -33,7 +33,7 @@ def convert_mcap_folder_to_lerobot_dataset(
     """
     mcap_folder = Path(mcap_folder)
     assert mcap_folder.exists(), f"Folder with mcap files {mcap_folder} does not exist."
-    mcap_files = list(mcap_folder.glob("*.mcap"))
+    mcap_files = list(mcap_folder.glob("*/*.mcap"))
     assert len(mcap_files) > 0, f"No MCAP files found in folder {mcap_folder}."
     print(f"Found {len(mcap_files)} MCAP files in folder {mcap_folder}.")
     for mcap_file in track(
@@ -78,7 +78,7 @@ if __name__ == "__main__":
 
     mcap_folder = Path(args.mcap_folder)
     assert mcap_folder.exists(), f"Folder with mcap files {mcap_folder} does not exist."
-    mcap_files = list(mcap_folder.glob("*.mcap"))
+    mcap_files = list(mcap_folder.glob("*/*.mcap"))
     assert len(mcap_files) > 0, f"No MCAP files found in folder {mcap_folder}."
 
     repo_id = args.repo_id

@@ -79,7 +79,7 @@ class BagRecorder:
                 "mcap",
             ]
             + self.topics_to_record
-            + ["tf", "tf_static"]  # Always record TF topics
+            + ["tf", "tf_static", "robot_description"]  # Always record TF topics
             + ["action"]  # Always record action topic (if exists)
         )
 

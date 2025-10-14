@@ -23,4 +23,6 @@ camera_configs:
     camera_color_image_topic: "camera/wrist_camera/color/image_rect_raw"
     camera_color_info_topic: "camera/wrist_camera/color/camera_info"
 
-sensor_configs: []
+sensor_configs:
+  - sensor_type: "force_torque"
+    data_topic: "/right/external_wrench"
