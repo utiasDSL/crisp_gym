@@ -47,10 +47,12 @@ class ManipulatorEnvConfig(ABC):
     sensor_configs: List[SensorConfig] = field(default_factory=lambda: [])
 
     gripper_mode: GripperMode | str = GripperMode.ABSOLUTE_CONTINUOUS
-    gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_threshold: float = 0.1
 
     max_episode_steps: int | None = None
+
+    gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
+    gripper_continuous_control: bool | None = None  # Deprecated, use gripper_mode instead
 
     def __post_init__(self):
         """Post-initialization checks."""
@@ -58,6 +60,11 @@ class ManipulatorEnvConfig(ABC):
             logging.warning(
                 "Deprecated: 'gripper_enabled' is deprecated, use 'gripper_mode' instead to set the control mode."
             )
+        if self.gripper_continuous_control is not None:
+            logging.warning(
+                "Deprecated: 'gripper_continuous_control' is deprecated, use 'gripper_mode' instead to set the control mode."
+            )
+
         if isinstance(self.gripper_mode, str):
             self.gripper_mode = GripperMode(self.gripper_mode)
 
