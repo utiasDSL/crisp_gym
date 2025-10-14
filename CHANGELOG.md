@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.0](https://github.com/utiasDSL/crisp_gym/compare/v3.1.0...v3.2.0) (2025-10-13)
+
+
+### Features
+
+* Add different gripper control modes([#28](https://github.com/utiasDSL/crisp_gym/issues/28)) ([9d0e2b3](https://github.com/utiasDSL/crisp_gym/commit/9d0e2b312bdb839d5b95c429b11957e3c0d3b3f6))
+
 ## [3.1.0](https://github.com/utiasDSL/crisp_gym/compare/v3.0.0...v3.1.0) (2025-10-09)
 
 
