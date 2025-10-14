@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import FrankaEnvConfig
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.envs.manipulator_env_config import FrankaEnvConfig
 
 # %% === Circle Parameters ===
 RADIUS = 0.1  # [m]

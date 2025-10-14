@@ -3,7 +3,7 @@
 from crisp_py.sensors.sensor_config import ForceTorqueSensorConfig
 from rich import print
 
-from crisp_gym.manipulator_env_config import make_env_config
+from crisp_gym.envs.manipulator_env_config import make_env_config
 from crisp_gym.util.lerobot_features import get_features
 
 env_type = "left_aloha_franka"  # Example environment type

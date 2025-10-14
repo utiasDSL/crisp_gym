@@ -4,7 +4,7 @@ To use an environment, you can use the `make_env` function to create an instance
 
 Example:
 ```python
-from crisp_gym import make_env
+from crisp_gym.envs import make_env
 
 env = make_env(
     env_type="manipulator_cartesian",
@@ -31,16 +31,16 @@ from typing import Any, List, Tuple
 import gymnasium as gym
 import numpy as np
 import rclpy
-from crisp_py.camera import Camera
-from crisp_py.gripper import Gripper
-from crisp_py.robot import Pose, Robot
+from crisp_py.camera import make_camera
+from crisp_py.gripper.gripper import make_gripper
+from crisp_py.robot import make_robot
 from crisp_py.sensors.sensor import make_sensor
-from crisp_py.utils.geometry import OrientationRepresentation
+from crisp_py.utils.geometry import Pose, OrientationRepresentation
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
 
-from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
+from crisp_gym.envs.manipulator_env_config import ManipulatorEnvConfig, make_env_config
 from crisp_gym.util.control_type import ControlType
 
 logger = logging.getLogger(__name__)
@@ -220,7 +220,7 @@ class ManipulatorBaseEnv(gym.Env):
                 - 'observation.images.{camera_name}': RGB image from each configured camera.
                 - 'observation.state': Combined state vector (cartesian pose + gripper).
                 - 'observation.state.joint': Current joint configuration of the robot in radians.
-                - 'observation.state.sensor_{sensor_name}': Sensor values.
+                - 'observation.state.{sensor_name}': Sensor values.
                 - 'task': Task description (empty string for now).
         """
         obs = {}
@@ -286,7 +286,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         for sensor in self.sensors:
             topic_to_feature[sensor.sensor_subscriber.topic_name] = (
-                f"observation.state.sensor_{sensor.config.name}"
+                f"observation.state.{sensor.config.name}"
             )
 
         return topic_to_feature

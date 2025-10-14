@@ -5,8 +5,8 @@ import time
 import numpy as np
 
 from crisp_gym.config.home import home_close_to_table, home_front_up
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import make_env_config
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.envs.manipulator_env_config import make_env_config
 from crisp_gym.teleop.teleop_robot import TeleopRobot
 from crisp_gym.teleop.teleop_robot_config import make_leader_config
 

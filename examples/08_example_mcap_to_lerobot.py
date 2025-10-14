@@ -11,7 +11,7 @@ from rich import print
 from rich.progress import track
 from rich.traceback import install
 
-from crisp_gym.manipulator_env import make_env
+from crisp_gym.envs.manipulator_env import make_env
 from crisp_gym.util.lerobot_features import get_features
 
 install(show_locals=True)

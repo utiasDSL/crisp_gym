@@ -19,7 +19,7 @@ from mcap_ros2.reader import read_ros2_messages
 from rich import print
 from rich.progress import track
 
-from crisp_gym.manipulator_env import ManipulatorBaseEnv, make_env
+from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, make_env
 from crisp_gym.util.lerobot_features import get_features
 
 

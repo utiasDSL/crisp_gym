@@ -8,8 +8,8 @@ import rclpy  # noqa: F401
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import home_close_to_table
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
-from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv, make_env
+from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import make_teleop_fn, make_teleop_streamer_fn
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.record.recording_manager_config import make_recording_manager_config

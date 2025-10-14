@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from crisp_gym.manipulator_env import ManipulatorJointEnv
-from crisp_gym.manipulator_env_config import FrankaEnvConfig
+from crisp_gym.envs.manipulator_env import ManipulatorJointEnv
+from crisp_gym.envs.manipulator_env_config import FrankaEnvConfig
 
 # === Configuration ===
 START_POSITION = np.array([0.4, 0.0, 0.4])

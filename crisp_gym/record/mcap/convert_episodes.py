@@ -6,8 +6,8 @@ from pathlib import Path
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from rich.progress import track
 
-from crisp_gym.manipulator_env import ManipulatorBaseEnv, make_env
-from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, make_env
+from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.record.mcap.convert_episode import (
     convert_mcap_file_to_lerobot_episode,
     get_fps_from_recording,
