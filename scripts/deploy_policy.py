@@ -15,7 +15,6 @@ from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
-from crisp_gym.config.home import home_close_to_table, home_front_up
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
