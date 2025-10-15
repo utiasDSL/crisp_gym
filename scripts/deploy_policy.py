@@ -15,6 +15,7 @@ from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
 from crisp_gym.util.setup_logger import setup_logging
+from crisp_gym.config.home import home_close_to_table, home_front_up
 
 parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
 parser.add_argument(
@@ -75,7 +76,7 @@ parser.add_argument(
     "--path",
     type=str,
     default=None,
-    help="Path to save the recordings.",
+    help="Path to the pretrained model (if not provided, a prompt will ask you to select one from 'outputs/train')",
 )
 parser.add_argument(
     "--env-config",
@@ -163,11 +164,10 @@ else:
 try:
     ctrl_type = "cartesian" if not args.joint_control else "joint"
     env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
-
     # %% Prepare the dataset
-    features = get_features(env.config, ctrl_type=ctrl_type)
+    features = get_features(env)
 
-    evaluator = Evaluator(output_file=args.path)
+    evaluator = Evaluator(output_file="outputs/eval/" + evaluation_file)
 
     recording_manager = make_recording_manager(
         recording_manager_type=args.recording_manager_type,
