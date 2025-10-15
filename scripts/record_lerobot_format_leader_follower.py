@@ -1,10 +1,11 @@
 """Script showcasing how to record data in Lerobot Format."""
 
 import argparse
+import json
 import logging
 
 import numpy as np
-import rclpy  # noqa: F401
+import rclpy
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import home_close_to_table
@@ -201,12 +202,24 @@ try:
         push_to_hub=args.push_to_hub,
     )
     recording_manager.wait_until_ready()
+    logger.info("Recording manager is ready.")
+
+    env_metadata = env.get_metadata()
+
+    with open(recording_manager.dataset_directory / "meta" / "crisp_meta.json", "w") as f:
+        json.dump(env_metadata, f, indent=4)
+
+    logger.info(
+        f"Environment metadata saved to {recording_manager.dataset_directory / 'meta' / 'crisp_meta.json'}"
+    )
 
     logger.info("Homing both robots before starting with recording.")
 
     # Prepare environment and leader
     if isinstance(leader, TeleopRobot):
         leader.prepare_for_teleop()
+
+    env.wait_until_ready()
     env.robot.config.home_config = home_close_to_table
     env.robot.config.time_to_home = 2.0
     env.home()
