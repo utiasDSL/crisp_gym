@@ -77,6 +77,11 @@ class RecordingManager(ABC):
         self.writer.start()
 
     @property
+    def dataset_directory(self) -> Path:
+        """Return the path to the dataset directory."""
+        return Path(HF_LEROBOT_HOME / self.config.repo_id)
+
+    @property
     def num_episodes(self) -> int:
         """Return the number of episodes to record."""
         return self.config.num_episodes
