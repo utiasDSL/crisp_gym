@@ -39,7 +39,11 @@ from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
 
-from crisp_gym.manipulator_env_config import ManipulatorEnvConfig, make_env_config
+from crisp_gym.manipulator_env_config import (
+    ManipulatorEnvConfig,
+    ObservationKeys,
+    make_env_config,
+)
 from crisp_gym.util.control_type import ControlType
 from crisp_gym.util.gripper_mode import (
     GripperMode,
@@ -110,7 +114,7 @@ class ManipulatorBaseEnv(gym.Env):
         self.observation_space = gym.spaces.Dict(
             {
                 **{
-                    f"observation.images.{camera.config.camera_name}": gym.spaces.Box(
+                    f"{ObservationKeys.IMAGE_OBS}.{camera.config.camera_name}": gym.spaces.Box(
                         low=np.zeros((*camera.config.resolution, 3), dtype=np.uint8),
                         high=255 * np.ones((*camera.config.resolution, 3), dtype=np.uint8),
                         dtype=np.uint8,
@@ -119,7 +123,7 @@ class ManipulatorBaseEnv(gym.Env):
                     if camera.config.resolution is not None
                 },
                 # Combined state: cartesian pose (6D)
-                "observation.state.cartesian": gym.spaces.Box(
+                ObservationKeys.CARTESIAN_OBS: gym.spaces.Box(
                     low=np.concatenate(
                         [
                             -np.ones((6,), dtype=np.float32),  # cartesian pose
@@ -133,13 +137,13 @@ class ManipulatorBaseEnv(gym.Env):
                     dtype=np.float32,
                 ),
                 # Gripper state
-                "observation.state.gripper": gym.spaces.Box(
+                ObservationKeys.GRIPPER_OBS: gym.spaces.Box(
                     low=np.array([0.0], dtype=np.float32),
                     high=np.array([1.0], dtype=np.float32),
                     dtype=np.float32,
                 ),
                 # Joint state
-                "observation.state.joint": gym.spaces.Box(
+                ObservationKeys.JOINT_OBS: gym.spaces.Box(
                     low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
                     * -np.pi,
                     high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
@@ -150,7 +154,7 @@ class ManipulatorBaseEnv(gym.Env):
                 "task": gym.spaces.Text(max_length=256),
                 # Sensor data
                 **{
-                    f"observation.state.sensor_{sensor.config.name}": gym.spaces.Box(
+                    f"{ObservationKeys.SENSOR_OBS}_{sensor.config.name}": gym.spaces.Box(
                         low=-np.inf * np.ones(sensor.config.shape, dtype=np.float32),
                         high=np.inf * np.ones(sensor.config.shape, dtype=np.float32),
                         dtype=np.float32,
@@ -219,12 +223,7 @@ class ManipulatorBaseEnv(gym.Env):
         """Retrieve the current observation from the robot in LeRobot format.
 
         Returns:
-            dict: A dictionary containing the current sensor and state information in LeRobot format:
-                - 'observation.images.{camera_name}': RGB image from each configured camera.
-                - 'observation.state': Combined state vector (cartesian pose + gripper).
-                - 'observation.state.joint': Current joint configuration of the robot in radians.
-                - 'observation.state.sensor_{sensor_name}': Sensor values.
-                - 'task': Task description (empty string for now).
+            dict: A dictionary containing the current sensor and state information.
         """
         obs = {}
 
@@ -246,21 +245,23 @@ class ManipulatorBaseEnv(gym.Env):
         )
 
         # Cartesian pose
-        obs["observation.state.cartesian"] = cartesian_pose.astype(np.float32)
+        obs[ObservationKeys.CARTESIAN_OBS] = cartesian_pose.astype(np.float32)
 
         # Gripper state
-        obs["observation.state.gripper"] = gripper_value.astype(np.float32)
+        obs[ObservationKeys.GRIPPER_OBS] = gripper_value.astype(np.float32)
 
         # Joint state
-        obs["observation.state.joint"] = self.robot.joint_values
+        obs[ObservationKeys.JOINT_OBS] = self.robot.joint_values
 
         # Camera images
         for camera in self.cameras:
-            obs[f"observation.images.{camera.config.camera_name}"] = camera.current_image
+            image_key = f"{ObservationKeys.IMAGE_OBS}.{camera.config.camera_name}"
+            obs[image_key] = camera.current_image
 
         # Sensor data
         for sensor in self.sensors:
-            obs[f"observation.state.sensor_{sensor.config.name}"] = sensor.value
+            sensor_key = f"{ObservationKeys.SENSOR_OBS}_{sensor.config.name}"
+            obs[sensor_key] = sensor.value
 
         return obs
 
@@ -374,10 +375,25 @@ class ManipulatorBaseEnv(gym.Env):
         if not blocking:
             self.switch_to_default_controller()
 
+    def get_metadata(self) -> dict:
+        """Generate metadata for the environment.
+
+        Returns:
+            dict: Metadata dictionary.
+        """
+        from importlib.metadata import version
+
+        return {
+            "crisp_gym_version": version("crisp_gym"),
+            "crisp_py_version": version("crisp_python"),
+            "control_type": self.ctrl_type.name,
+            "env_config": self.config.get_metadata(),
+        }
+
     def move_to(
         self,
         position: List | NDArray | None = None,
-        pose: List | NDArray | None = None,
+        pose: Pose | None = None,
         speed: float = 0.05,
     ):
         """Move the robot to a specified position or pose.
@@ -432,7 +448,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
                 **self.observation_space.spaces,
-                "observation.state.target": gym.spaces.Box(
+                ObservationKeys.TARGET_OBS: gym.spaces.Box(
                     low=np.ones((6,), dtype=np.float32) * -np.pi,
                     high=np.ones((6,), dtype=np.float32) * np.pi,
                     dtype=np.float32,
@@ -537,7 +553,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
                 **self.observation_space.spaces,
-                "observation.state.target": gym.spaces.Box(
+                ObservationKeys.TARGET_OBS: gym.spaces.Box(
                     low=np.ones((self.num_joints,), dtype=np.float32) * -np.pi,
                     high=np.ones((self.num_joints,), dtype=np.float32) * np.pi,
                     dtype=np.float32,

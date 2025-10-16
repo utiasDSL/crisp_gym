@@ -67,6 +67,7 @@ def get_features(
     state_feature_length = 0
     state_feature_names = []
 
+    # TODO: unify with crisp_gym observation keys
     for feature_key in env.observation_space.keys():
         if ignore_keys and feature_key in ignore_keys:
             continue
@@ -104,7 +105,7 @@ def get_features(
         elif feature_key.startswith("task"):
             continue  # Task features are handled separately
 
-        elif feature_key.startswith("observation.images."):
+        elif feature_key.startswith("observation.images"):
             if not use_video:
                 features[feature_key] = {
                     "dtype": "image",
@@ -169,7 +170,9 @@ def construct_state_feature(length: int, names: list[str]) -> Dict[str, Any]:
     }
 
 
-def concatenate_state_features(obs: Dict[str, Any], features: Dict[str, Dict]) -> np.ndarray:
+def concatenate_state_features(
+    obs: Dict[str, Any], features: Dict[str, Dict] | None = None
+) -> np.ndarray:
     """Concatenate individual state features into a single state vector.
 
     This function takes the individual state components from the observation dictionary
@@ -184,29 +187,27 @@ def concatenate_state_features(obs: Dict[str, Any], features: Dict[str, Dict]) -
     """
     state_components = []
 
-    for feature_name in features:
+    for feature_name in obs:
         if not feature_name.startswith("observation.state"):
             continue
 
         if feature_name == "observation.state":
             continue  # Skip the combined state feature
 
-        if feature_name in obs:
-            value = obs[feature_name]
-            if isinstance(value, np.ndarray):
-                state_components.append(value.astype(np.float32))
-            else:
-                state_components.append(np.array(value, dtype=np.float32))
+        value = obs[feature_name]
+        if isinstance(value, np.ndarray):
+            state_components.append(value.astype(np.float32))
         else:
-            raise ValueError(f"Missing required state component: {feature_name}")
+            state_components.append(np.array(value, dtype=np.float32))
 
     concatenated_state = np.concatenate(state_components, axis=0)
-    expected_length = features["observation.state"]["shape"][0]
+    if features:
+        expected_length = features["observation.state"]["shape"][0]
 
-    if concatenated_state.shape[0] != expected_length:
-        raise ValueError(
-            f"Concatenated state length {concatenated_state.shape[0]} does not match expected length {expected_length}."
-        )
+        if concatenated_state.shape[0] != expected_length:
+            raise ValueError(
+                f"Concatenated state length {concatenated_state.shape[0]} does not match expected length {expected_length}."
+            )
 
     return concatenated_state
 
