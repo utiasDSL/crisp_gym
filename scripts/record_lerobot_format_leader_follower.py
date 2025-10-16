@@ -260,6 +260,7 @@ try:
         if isinstance(leader, TeleopRobot):
             leader.robot.reset_targets()
             leader.robot.home(blocking=False, home_config=random_home)
+        env.gripper.open()
 
     with recording_manager:
         while not recording_manager.done():
