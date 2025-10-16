@@ -393,7 +393,7 @@ class ManipulatorBaseEnv(gym.Env):
     def move_to(
         self,
         position: List | NDArray | None = None,
-        pose: List | NDArray | None = None,
+        pose: Pose | None = None,
         speed: float = 0.05,
     ):
         """Move the robot to a specified position or pose.
