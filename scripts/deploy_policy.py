@@ -164,6 +164,8 @@ else:
 try:
     ctrl_type = "cartesian" if not args.joint_control else "joint"
     env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
+    env.config.robot_config.home_config = home_close_to_table
+    env.config.robot_config.time_to_home = 2.0
     # %% Prepare the dataset
     features = get_features(env)
 
@@ -212,6 +214,7 @@ try:
         """Hook function to be called when stopping the recording."""
         env.robot.reset_targets()
         env.robot.home(blocking=False)
+        env.gripper.open()
 
     with evaluator.start_eval(overwrite=True, activate=args.evaluate):
         with recording_manager:
