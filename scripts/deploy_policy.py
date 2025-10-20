@@ -254,6 +254,7 @@ def on_start():
 def on_end():
     """Hook function to be called when stopping the recording."""
     env.robot.reset_targets()
+    env.gripper.open()
     env.robot.home(blocking=False)
 
 
