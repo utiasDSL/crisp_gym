@@ -102,21 +102,21 @@ parser.add_argument(
    "--async-inference",
     type=int,
     default=None,
-    help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter by that number for consitency. If no value is passed no async inference is done",
+    help="At which step to start a new prediction during the execution of one chunk. The resulting chunk will be shorter for consitency.",
 )
 
 parser.add_argument(
    "--inference-steps",
     type=int,
     default=None,
-    help="How many steps should the policy use from its prediciton",
+    help="How many steps should the policy execute from its prediciton",
 )
 
 parser.add_argument(
    "--inpainting",
     type=bool,
     default=False,
-    help="Wether to use the already predicted action chunks executed during async inference as groundtruth in the denoising steps",
+    help="Wether to use the actions that will be executed while predicting the next action chunk in async mode, as groundtruth in the following denoising steps",
 )
 
 args = parser.parse_args()
@@ -168,8 +168,10 @@ if args.env_config is None:
     logging.info(f"Using follower configuration: {args.env_config}")
 
 if args.async_inference is None: 
-    logging.warning("--async_inference needs to be set correctly")
-    exit(1)
+    args.async_inference = prompt.prompt(
+        "Please enter after which action during the execution of the action chunk a new action chunk should be predicted"
+    )
+    logging.info(f"Using async inference at: {args.async_inference}")
 
 ctrl_type = "cartesian" if not args.joint_control else "joint"
 env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)

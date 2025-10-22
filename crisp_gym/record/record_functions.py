@@ -125,6 +125,9 @@ def inference_worker(  # noqa: D417
         conn (Connection): The connection to the parent process for sending and receiving data.
         pretrained_path (str): Path to the pretrained policy model.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
+        steps (int): How many actions are executed from the prediction
+        inpainting (bool): Wether to use inpainting in the prediction of a new chunk or not 
+        replan_time (int): After how many steps to start predicting a new action chunk 
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_config = TrainPipelineConfig.from_pretrained(pretrained_path)
@@ -134,28 +137,31 @@ def inference_worker(  # noqa: D417
             "Please ensure the policy is correctly configured."
         )
     policy_cls = get_policy_class(train_config.policy.type)
+
+    policy_config = PreTrainedConfig.from_pretrained(pretrained_path)
     
     if steps is not None:
-        policy_config = PreTrainedConfig.from_pretrained(pretrained_path)
         # Check if the number of steps make sense 
         horizon=policy_config.horizon
         if steps >= horizon: 
             raise ValueError(
-            f"The policy steps={steps} must be smaller than the horizon={horizon}. "
+            f"The policy steps={steps} must be smaller than the horizon={horizon}."
             "Please modify your cli."
         )
         obs=policy_config.n_obs_steps
         if steps <= obs: 
             raise ValueError(
-            f"The policy must give out steps={steps} bigger than the observation horizon={obs}. "
+            f"The policy must give out steps={steps} bigger than the observation horizon={obs}."
             "Please modify your cli."
         )
         policy_config.n_action_steps = int(steps)
          # Overwrite to load the new model with the modified config file
-        policy = policy_cls.from_pretrained(pretrained_path,config=policy_config)
 
-    else: 
-        policy = policy_cls.from_pretrained(pretrained_path)
+    if inpainting is True:
+        policy_config.inpainting_lengh = max(0, int(policy_config.n_action_steps) - int(replan_time))
+    
+    policy = policy_cls.from_pretrained(pretrained_path,config=policy_config)
+
 
     logging.info(
         f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
@@ -167,11 +173,6 @@ def inference_worker(  # noqa: D417
     cfg = policy.config
     n_obs = int(cfg.n_obs_steps)
     print("Ready to recive information")
-
-    # Set up the policy to consider inpainting. This requires updating the default policies 
-    if inpainting:
-        # How much to reuse the steps from a previous prediction 
-        policy.inpainting = int(replan_time)
 
     while True:
         # Check if messages are recieved correctly

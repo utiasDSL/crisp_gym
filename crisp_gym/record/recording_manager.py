@@ -366,30 +366,28 @@ class RecordingManager(ABC):
             # load a new chunk when an old chunk is finished
             if i==0:
                 # Edge case when we want to make a new prediction after all action chunks have been used up  
-                # To be fixed 
                 if n_act==replan_time:
                     conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
                     print("Starting new inference_1")
                 next_chunk = conn.recv()
                 current_chunk = next_chunk[n_act-replan_time:] 
-                print ("Lengh ot the new current chunk:",len(current_chunk))
+                print ("Length ot the new current chunk:",len(current_chunk))
 
-            # Start prediction
-            if i ==(2*replan_time-n_act):
-                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-                    print("Starting new inference_2")
-
-            # get current observation
-            obs_buf.append(env._get_obs())
 
             # execute action
             action = current_chunk[i]
             print("Process element:",i)
             try:
                 obs, *_ = env.step(action, block=False)
+                obs_buf.append(obs)
             except Exception as e:
                 logger.error(f"Error during environment step: {e}")
                 break
+
+            # Start prediction
+            if i ==(2*replan_time-n_act):
+                    conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                    print("Starting new inference_2")
 
             # push frame to writer
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
