@@ -113,10 +113,10 @@ parser.add_argument(
 )
 
 parser.add_argument(
-   "--inpainting",
-    type=bool,
+    "--inpainting",
+    action=argparse.BooleanOptionalAction,   # supports --inpainting / --no-inpainting
     default=False,
-    help="Wether to use the actions that will be executed while predicting the next action chunk in async mode, as groundtruth in the following denoising steps",
+    help="Use executed actions as prefix during denoising in async mode."
 )
 
 args = parser.parse_args()
@@ -246,11 +246,20 @@ logging.info("Homing robot before starting with recording.")
 env.home()
 env.reset()
 
+def _drain_conn(conn):
+    """Non-blocking: remove any pending messages so we don't reuse stale chunks."""
+    try:
+        while conn.poll(0):
+            _ = conn.recv()
+    except (EOFError, OSError):
+        pass
+
 
 def on_start():
     """Hook function to be called when starting a new episode."""
     env.reset()
     parent_conn.send("reset")
+    _drain_conn(parent_conn) 
 
 
 def on_end():

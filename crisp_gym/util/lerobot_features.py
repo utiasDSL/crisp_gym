@@ -1,6 +1,8 @@
 """Wrapper to convert the outputs of the step function to the proper LeRobotDataset expected format."""
 
-from typing import Dict
+from typing import Any, Dict
+import numpy as np
+import torch 
 
 try:
     from lerobot.datasets.lerobot_dataset import CODEBASE_VERSION
@@ -110,3 +112,38 @@ def get_features(
     }
 
     return features
+
+def numpy_obs_to_torch(obs: Dict[str, Any], env) -> Dict[str, Any]:
+    """Convert numpy observations to torch tensors for policy inference.
+
+    This function takes a dictionary of observations where each value is a numpy array,
+    and converts them to torch tensors. It handles different types of observations
+    such as state, task, and images.
+
+    Args:
+        obs (Dict[str, Any]): Dictionary of observations with numpy arrays.
+
+    Returns:
+        Dict[str, Any]: Dictionary of observations with torch tensors.
+    """
+    try:
+        import torch
+    except ImportError:
+        raise ImportError("PyTorch is required for tensor conversion")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    state = np.concatenate([obs["cartesian"][:6], obs["gripper"]])
+    batch = {
+        "observation.state": torch.from_numpy(state)
+            .unsqueeze(0)
+            .to(device=device, dtype=torch.float32),
+        "task": "", # TODO: Add task description if needed
+    }
+    for cam in env.cameras:
+        img = obs[f"{cam.config.camera_name}_image"]
+        batch[f"observation.images.{cam.config.camera_name}"] = (
+            torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=torch.float32)/ 255
+        )
+
+    return batch
+

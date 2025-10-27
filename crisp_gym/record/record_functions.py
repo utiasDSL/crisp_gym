@@ -17,6 +17,7 @@ from lerobot.policies.factory import get_policy_class
 from lerobot.policies.utils import populate_queues
 
 from crisp_gym.util.control_type import ControlType
+from crisp_gym.util.lerobot_features import numpy_obs_to_torch
 
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection
@@ -148,14 +149,7 @@ def inference_worker(  # noqa: D417
             f"The policy steps={steps} must be smaller than the horizon={horizon}."
             "Please modify your cli."
         )
-        obs=policy_config.n_obs_steps
-        if steps <= obs: 
-            raise ValueError(
-            f"The policy must give out steps={steps} bigger than the observation horizon={obs}."
-            "Please modify your cli."
-        )
         policy_config.n_action_steps = int(steps)
-         # Overwrite to load the new model with the modified config file
 
     if inpainting is True:
         policy_config.inpainting_lengh = max(0, int(policy_config.n_action_steps) - int(replan_time))
@@ -166,8 +160,20 @@ def inference_worker(  # noqa: D417
     logging.info(
         f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
     )
+
     policy.reset()
     policy.to(device).eval()
+
+    # Check if not using warmup here makes sense. Normally the policy is reseted multiple times afterwars and warmup should not play a role here
+    # warmup_obs_raw = env.observation_space.sample()
+    # warmup_obs = numpy_obs_to_torch(warmup_obs_raw,env)
+
+    # with torch.inference_mode():
+    #     _ = policy.select_action(warmup_obs)
+    #     torch.cuda.synchronize()
+
+    # logging.info("[Inference] Warm-up complete")
+
 
     # Read policy config to know obs/action window sizes
     cfg = policy.config
@@ -195,19 +201,7 @@ def inference_worker(  # noqa: D417
         with torch.inference_mode():
             for i in range(n_obs):
                 last= obs_seq[i]
-                state = np.concatenate([last["cartesian"][:6], last["gripper"]])
-                batch = {
-                    "observation.state": torch.from_numpy(state)
-                        .unsqueeze(0)
-                        .to(device=device, dtype=torch.float32),
-                    "task": "", # TODO: Add task description if needed
-                }
-                for cam in env.cameras:
-                    img = last[f"{cam.config.camera_name}_image"]
-                    batch[f"observation.images.{cam.config.camera_name}"] = (
-                        torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=torch.float32)/ 255
-                    )
-
+                batch=numpy_obs_to_torch(last,env)
                 # This mirrors Lerobot `select_action()` pre-processing so queues are filled correctly
                 batch_norm = policy.normalize_inputs(batch)
                 if policy.config.image_features:
