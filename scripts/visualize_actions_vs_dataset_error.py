@@ -34,8 +34,37 @@ def _make_inference_batch(batch: dict) -> dict:
     return cleaned
 
 
+def compute_rmse_series(targets_t: torch.Tensor, preds_t: torch.Tensor) -> Dict[str, torch.Tensor]:
+    """
+    Compute RMSE metrics.
+      - per_step_rmse[t] = sqrt(mean_d (pred[t,d]-target[t,d])^2)
+      - cumulative_rmse[t] = sqrt(mean_{<=t,d} (pred-target)^2)
+      - overall_rmse = cumulative_rmse[-1]
+    All tensors are CPU tensors of shape [T] (except overall which is scalar).
+    """
+    assert targets_t.shape == preds_t.shape, "targets and preds must have same shape"
+    diff = preds_t - targets_t  # [T, D]
+    se_per_step = (diff ** 2).mean(dim=1)      # [T] mean over dims
+    per_step_rmse = torch.sqrt(se_per_step)    # [T]
+
+    # cumulative mean of squared error, then sqrt (running RMSE)
+    cumsum_se = torch.cumsum(se_per_step, dim=0)               # [T]
+    steps = torch.arange(1, se_per_step.numel() + 1, dtype=se_per_step.dtype)
+    cumulative_rmse = torch.sqrt(cumsum_se / steps)            # [T]
+
+    overall_rmse = cumulative_rmse[-1].item()
+
+    return {
+        "per_step_rmse": per_step_rmse,        # [T]
+        "cumulative_rmse": cumulative_rmse,    # [T]
+        "overall_rmse": overall_rmse,          # float
+    }
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Visualize policy vs. dataset actions with replan markers")
+    parser = argparse.ArgumentParser(
+        description="Visualize policy vs. dataset actions with replan markers and RMSE plot"
+    )
     parser.add_argument(
         "--checkpoint",
         type=Path,
@@ -80,15 +109,15 @@ def main():
     )
     args = parser.parse_args()
 
-    # Find out the device
+    # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Prepare the policy
+    # Policy
     train_config = TrainPipelineConfig.from_pretrained(args.checkpoint)
     policy_cls = get_policy_class(train_config.policy.type)
     policy_config = PreTrainedConfig.from_pretrained(args.checkpoint)
 
-    # Determine action horizon (how many steps per observation)
+    # Determine action horizon
     if args.action_horizon is not None:
         action_horizon = int(args.action_horizon)
     else:
@@ -98,10 +127,8 @@ def main():
     policy.to(device)
     policy.eval()
 
-    # Load the dataset
+    # Dataset & loader
     dataset = LeRobotDataset(repo_id=args.dataset, root=args.dataset)
-
-    # Build the data loader
     dataloader = torch.utils.data.DataLoader(
         dataset,
         num_workers=args.num_workers,
@@ -120,7 +147,7 @@ def main():
 
     last_batch: Optional[Dict[str, Any]] = None
     for batch in dataloader:
-        # Try to find the correct batch
+        # find the correct episode
         b_ep = batch.get("episode_index")
         if b_ep is None:
             raise KeyError("Expected key 'episode_index' in batch.")
@@ -141,7 +168,7 @@ def main():
         if action_dim is None:
             action_dim = tgt.numel()
 
-        # Predicted action from policy
+        # Predicted action
         cleaned_batch = _make_inference_batch(batch)
         pred = policy.select_action(cleaned_batch)
         pred = pred.detach().float().view(-1)
@@ -150,11 +177,10 @@ def main():
         targets.append(tgt.cpu())
         preds.append(pred.cpu())
 
-        # Time (fallback to step index if timestamp is absent)
+        # Time
         if "timestamp" in batch:
             t = float(batch["timestamp"].view(-1)[0].detach().cpu().item())
         else:
-            # reconstruct pseudo-time from frame_index if available; else just enumerate
             if "frame_index" in batch:
                 t = float(batch["frame_index"].view(-1)[0].detach().cpu().item())
             else:
@@ -173,15 +199,27 @@ def main():
 
     T, D = targets_t.shape
 
-    # Indices where a new prediction (based on a fresh observation) starts.
-    # If horizon == 1, you can comment this out if you don't want dots everywhere.
+    # ----- RMSE series -----
+    rmse = compute_rmse_series(targets_t, preds_t)
+    per_step_rmse = rmse["per_step_rmse"]          # [T]
+    cumulative_rmse = rmse["cumulative_rmse"]      # [T]
+    overall_rmse = rmse["overall_rmse"]            # float
+
+    # Print a concise RMSE summary
+    print("\n=== RMSE Summary ===")
+    print(f"Episode: {ep}")
+    print(f"Overall RMSE: {overall_rmse:.6f}")
+    print("====================\n")
+
+    # Replan boundaries
     replan_idx = list(range(action_horizon, T, action_horizon)) if action_horizon > 0 else []
 
     # ----- Plot -----
-    fig, axes = plt.subplots(D, 1, figsize=(9, 2.3 * D), sharex=True)
-    if D == 1:
-        axes = [axes]
+    # We make D action subplots + 1 RMSE subplot at the bottom
+    fig, axes = plt.subplots(D + 1, 1, figsize=(9, 2.3 * D + 3.0), sharex=True)
+    axes = list(axes)  # ensure list
 
+    # Action traces
     for d in range(D):
         ax = axes[d]
         ax.plot(times_t.numpy(), targets_t[:, d].numpy(), label="Target")
@@ -201,31 +239,53 @@ def main():
                 zorder=3,
             )
 
+        # Put a compact legend only on the first action subplot (to reduce clutter)
+        if d == 0:
+            ax.legend(loc="upper left")
+            ax.set_title(
+                f"Episode {ep}: action targets vs. predictions (horizon={action_horizon})"
+            )
+
         ax.set_ylabel(f"dim {d}")
         ax.grid(True, linestyle="--", alpha=0.3)
-        if d == 0:
-            ax.set_title(
-                f"Episode {ep}: action targets vs. predictions\n(action horizon = {action_horizon})"
-            )
+
+    # RMSE subplot (instantaneous and cumulative)
+    loss_ax = axes[-1]
+    loss_ax.plot(times_t.numpy(), per_step_rmse.numpy(), label="Per-step RMSE")
+    loss_ax.plot(times_t.numpy(), cumulative_rmse.numpy(), label="Cumulative RMSE")
+
+    if replan_idx:
+        loss_ax.scatter(
+            times_t[replan_idx].numpy(),
+            per_step_rmse[replan_idx].numpy(),
+            s=25,
+            marker="x",
+            label="New prediction start",
+            zorder=3,
+        )
+
+    # Put overall RMSE as text inside the loss subplot (so legend won't cover it)
+    text_str = f"Overall RMSE = {overall_rmse:.4f}"
+    loss_ax.text(
+        0.01, 0.95, text_str,
+        transform=loss_ax.transAxes,
+        va="top", ha="left",
+        bbox=dict(boxstyle="round", facecolor="white", alpha=0.7, linewidth=0.5)
+    )
+
+    loss_ax.set_ylabel("RMSE")
+    loss_ax.legend(loc="upper right")
+    loss_ax.grid(True, linestyle="--", alpha=0.3)
 
     xlabel = "time (s)" if (last_batch and "timestamp" in last_batch) else "step"
     axes[-1].set_xlabel(xlabel)
-
-    # single legend outside if many dims
-    handles, labels = axes[0].get_legend_handles_labels()
-    # Only keep unique labels (for when scatter adds a duplicate)
-    uniq = {}
-    for h, l in zip(handles, labels):
-        if l not in uniq:
-            uniq[l] = h
-    fig.legend(list(uniq.values()), list(uniq.keys()), loc="upper right")
 
     plt.tight_layout(rect=[0, 0, 0.98, 0.98])
 
     output_path = args.output or Path(f"./actions_episode{args.episode}.png")
     fig.savefig(output_path, dpi=150)
     plt.close(fig)
-    print(f"Saved continuous plot with replan dots to {output_path}")
+    print(f"Saved plot (with instantaneous & cumulative RMSE) to {output_path}")
 
 
 if __name__ == "__main__":

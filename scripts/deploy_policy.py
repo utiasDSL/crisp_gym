@@ -169,7 +169,7 @@ if args.env_config is None:
 
 if args.async_inference is None: 
     args.async_inference = prompt.prompt(
-        "Please enter after which action during the execution of the action chunk a new action chunk should be predicted"
+        "Please enter after which time during the execution of a action chunk a new action chunk should be predicted"
     )
     logging.info(f"Using async inference at: {args.async_inference}")
 
