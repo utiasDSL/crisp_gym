@@ -26,6 +26,7 @@ while True:
 import logging
 import os
 from pathlib import Path
+import time
 from typing import Any, List, Tuple
 
 import gymnasium as gym
@@ -240,19 +241,30 @@ class ManipulatorBaseEnv(gym.Env):
             axis=0,
         )
         gripper_value = (
-            1 - np.array([self.gripper.value])
+            np.array([self.gripper.value])
             if self.config.gripper_mode != GripperMode.NONE
             else np.array([0.0])
         )
 
+        gripper_target = (
+            np.array([self.gripper.target])
+            if self.config.gripper_mode != GripperMode.NONE
+            else np.array([0.0])
+        )
         # Cartesian pose
         obs["observation.state.cartesian"] = cartesian_pose.astype(np.float32)
 
         # Gripper state
         obs["observation.state.gripper"] = gripper_value.astype(np.float32)
 
+        # Gripper target
+        obs["observation.target.gripper"] = gripper_target.astype(np.float32)
+
+        t0 = time.perf_counter()
         # Joint state
         obs["observation.state.joint"] = self.robot.joint_values
+        dt_camera = time.perf_counter() - t0
+        
 
         # Camera images
         for camera in self.cameras:
@@ -262,6 +274,7 @@ class ManipulatorBaseEnv(gym.Env):
         for sensor in self.sensors:
             obs[f"observation.state.sensor_{sensor.config.name}"] = sensor.value
 
+        obs["dt_camera"] = dt_camera
         return obs
 
     def _set_gripper_action(self, action: float):
@@ -291,7 +304,7 @@ class ManipulatorBaseEnv(gym.Env):
         elif self.config.gripper_mode == GripperMode.ABSOLUTE_CONTINUOUS:
             self.gripper.set_target(action)
         elif self.config.gripper_mode == GripperMode.RELATIVE_CONTINUOUS:
-            self.gripper.set_target(np.clip(self.gripper.value + action, 0.0, 1.0))
+            self.gripper.set_target(np.clip(self.gripper.target + action, 0.0, 1.0))
         else:
             raise ValueError(f"Unsupported gripper mode: {self.config.gripper_mode}")
 
@@ -428,7 +441,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.config.xyz_min = np.array(self.config.xyz_min)
         self.config.xyz_max = np.array(self.config.xyz_max)
-        self.start_time = 0.0
+        self.start_time = None
 
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
@@ -505,14 +518,36 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         if self.config.gripper_mode != GripperMode.NONE:
             self._set_gripper_action(action[-1])
 
+        t0 = time.perf_counter()
+
         if block:
-            self.control_rate.sleep()
+            time.sleep(1.0 / self.config.control_frequency)
+            # if self.start_time is None:
+            #     self.start_time = time.time()
+            # time.sleep(max(0.0, (self.timestep + 1) / self.config.control_frequency - (time.time() - self.start_time)))   
+
+            # self.control_rate.sleep()
+        dt = time.perf_counter() - t0
 
         _, reward, terminated, truncated, info = super().step(action)
+        info["sleep_time"] = dt
 
+        t0 = time.perf_counter()
         obs = self._get_obs()
+        dt = time.perf_counter() - t0
+        info["obs_time"] = dt
 
         return obs, reward, terminated, truncated, info
+    
+    @override
+    def reset(
+        self, *, seed: int | None = None, options: dict[str, Any] | None = None
+    ) -> Tuple[dict, dict]:
+        """Reset the environment."""
+        obs, info = super().reset(seed=seed, options=options)
+        self.start_time = None
+
+        return obs, info
 
 
 class ManipulatorJointEnv(ManipulatorBaseEnv):
