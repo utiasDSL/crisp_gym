@@ -426,8 +426,9 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.ctrl_type = ControlType.CARTESIAN
 
-        # TODO: Make this configurable
-        self._min_z_height = 0.0
+        self.config.xyz_min = np.array(self.config.xyz_min)
+        self.config.xyz_max = np.array(self.config.xyz_max)
+        self.start_time = 0.0
 
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
@@ -495,7 +496,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         translation, rotation = action[:3], Rotation.from_euler("xyz", action[3:6])
 
         target_position = self.robot.target_pose.position + translation
-        target_position[2] = max(target_position[2], self._min_z_height)
+        target_position = np.clip(target_position, self.config.xyz_min, self.config.xyz_max)
         target_orientation = rotation * self.robot.target_pose.orientation
 
         target_pose = Pose(position=target_position, orientation=target_orientation)

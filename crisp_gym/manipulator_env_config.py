@@ -50,6 +50,9 @@ class ManipulatorEnvConfig(ABC):
     gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_threshold: float = 0.1
 
+    xyz_min: List[float] = field(default_factory=lambda: [-10.0, -10.0, -10.0])
+    xyz_max: List[float] = field(default_factory=lambda: [10.0, 10.0, 10.0])
+
     max_episode_steps: int | None = None
 
     def __post_init__(self):
