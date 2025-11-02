@@ -1,13 +1,14 @@
 """Script showcasing how to record data in Lerobot Format."""
 
 import argparse
+import json
 import logging
 
 import numpy as np
-import rclpy  # noqa: F401
+import rclpy
 
 import crisp_gym  # noqa: F401
-from crisp_gym.config.home import home_close_to_table
+from crisp_gym.config.home import HomeConfig
 from crisp_gym.config.path import CRISP_CONFIG_PATH
 from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
 from crisp_gym.manipulator_env_config import list_env_configs
@@ -112,6 +113,12 @@ parser.add_argument(
     action="store_true",
     help="Whether to use streamed teleop (e.g., from a phone or VR device) for the leader robot.",
 )
+parser.add_argument(
+    "--home-config-noise",
+    type=float,
+    default=0.0,
+    help="Noise to add to the home configuration when homing the robots to randomize the position a bit.",
+)
 
 args = parser.parse_args()
 
@@ -168,6 +175,8 @@ try:
         control_type=ctrl_type,
         namespace=args.follower_namespace,
     )
+    env.config.robot_config.home_config = HomeConfig.CLOSE_TO_TABLE.value
+    env.config.robot_config.time_to_home = 2.0
 
     leader: TeleopRobot | TeleopStreamedPose | None = None
     if args.use_streamed_teleop:
@@ -176,7 +185,7 @@ try:
     else:
         leader = make_leader(args.leader_config, namespace=args.leader_namespace)
         leader.wait_until_ready()
-        leader.config.leader.home_config = home_close_to_table
+        leader.config.leader.home_config = HomeConfig.CLOSE_TO_TABLE.value
         leader.config.leader.time_to_home = 2.0
         logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
@@ -201,15 +210,25 @@ try:
         push_to_hub=args.push_to_hub,
     )
     recording_manager.wait_until_ready()
+    logger.info("Recording manager is ready.")
+
+    env_metadata = env.get_metadata()
+
+    with open(recording_manager.dataset_directory / "meta" / "crisp_meta.json", "w") as f:
+        json.dump(env_metadata, f, indent=4)
+
+    logger.info(
+        f"Environment metadata saved to {recording_manager.dataset_directory / 'meta' / 'crisp_meta.json'}"
+    )
 
     logger.info("Homing both robots before starting with recording.")
 
     # Prepare environment and leader
     if isinstance(leader, TeleopRobot):
         leader.prepare_for_teleop()
-    env.robot.config.home_config = home_close_to_table
-    env.robot.config.time_to_home = 2.0
-    env.home()
+
+    env.wait_until_ready()
+    env.home(home_config=HomeConfig.CLOSE_TO_TABLE.randomize(noise=args.home_config_noise))
     env.reset()
 
     tasks = list(args.tasks)
@@ -236,10 +255,12 @@ try:
     def on_end():
         """Hook function to be called when stopping the recording."""
         env.robot.reset_targets()
-        env.robot.home(blocking=False)
+        random_home = HomeConfig.CLOSE_TO_TABLE.randomize(noise=args.home_config_noise)
+        env.robot.home(blocking=False, home_config=random_home)
         if isinstance(leader, TeleopRobot):
             leader.robot.reset_targets()
-            leader.robot.home(blocking=False)
+            leader.robot.home(blocking=False, home_config=random_home)
+        env.gripper.open()
 
     with recording_manager:
         while not recording_manager.done():

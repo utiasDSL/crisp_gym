@@ -14,7 +14,8 @@ from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 
 from crisp_gym.util.control_type import ControlType
-from crisp_gym.util.lerobot_features import numpy_obs_to_torch
+from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
+from crisp_gym.util.setup_logger import setup_logging
 
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
     from crisp_gym.manipulator_env import ManipulatorBaseEnv, ManipulatorCartesianEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
     from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose
+
+
+logger = logging.getLogger(__name__)
 
 
 def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamedPose) -> Callable:
@@ -166,6 +170,9 @@ def inference_worker(
     policy.to(device).eval()
 
     warmup_obs_raw = env.observation_space.sample()
+    logging.info(f"[Inference] Warm-up observation keys: {list(warmup_obs_raw.keys())}")
+    warmup_obs_raw["observation.state"] = concatenate_state_features(warmup_obs_raw)
+    logging.info(f"[Inference] Warm-up observation keys: {list(warmup_obs_raw.keys())}")
     warmup_obs = numpy_obs_to_torch(warmup_obs_raw)
 
     with torch.inference_mode():
@@ -221,15 +228,19 @@ def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable
         """
         obs_raw = env.get_obs()
 
+        from crisp_gym.util.lerobot_features import concatenate_state_features
+
+        obs_raw["observation.state"] = concatenate_state_features(obs_raw)
+
         # Send observation to inference worker and receive action
         parent_conn.send(obs_raw)
         action = parent_conn.recv().squeeze(0).to("cpu").numpy()
-        logging.debug(f"Action: {action}")
+        logger.debug(f"Action: {action}")
 
         try:
             env.step(action, block=False)
         except Exception as e:
-            logging.exception(f"Error during environment step: {e}")
+            logger.exception(f"Error during environment step: {e}")
 
         return obs_raw, action
 
