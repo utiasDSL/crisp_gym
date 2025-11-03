@@ -16,6 +16,7 @@ with evaluator.start_eval():  # Opens the output file for writing results
 """
 
 import logging
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -40,6 +41,8 @@ class Evaluator:
         self.eval_writer = None
         logger.info(f"Evaluator initialized. Results will be saved to {self.output_file}.")
 
+        self.start_time = None
+
     @contextmanager
     def start_eval(self, overwrite: bool = True, activate: bool = True):
         """Context manager to handle the evaluation process."""
@@ -59,6 +62,10 @@ class Evaluator:
         finally:
             self.eval_writer.close()
 
+    def start_timer(self):
+        """Start the evaluation timer."""
+        self.start_time = time.time()
+
     def evaluate(self, episode: int):
         """Evaluate the performance of the model after an episode using user input.
 
@@ -67,26 +74,36 @@ class Evaluator:
         Args:
             episode (int): The episode number to evaluate.
         """
+        if self.start_time is None:
+            logger.warning(
+                "Evaluation timer was not started. Not recording time taken for evaluation."
+            )
+            elapsed_time = None
+        else:
+            end_time = time.time()
+            elapsed_time = end_time - self.start_time
+            logger.info(f"Episode {episode} took {elapsed_time:.2f} seconds.")
+            self.start_time = None
+
         if self.eval_writer:
             logger.info(f"Evaluating episode {episode}. Please provide your feedback.")
             success = prompt(
                 message="Was the episode successful? (yes/no)", options=["yes", "no"], default="yes"
             )
-            score = prompt(message="Please provide a score for the episode (0-10):", default="5")
+            score = prompt(
+                message="Please provide a score/completion progress for the episode (0-10):",
+                default="5",
+            )
 
-            try:
-                score = int(score)
-                if not (0 <= score <= 10):
-                    raise ValueError("Score must be between 0 and 10.")
-            except ValueError as e:
-                logger.error(f"Invalid score input: {e}. Defaulting to 5.")
-                score = 5
+            score = int(score)
+            if not (0 <= score <= 10):
+                raise ValueError("Score must be between 0 and 10.")
 
-                self.eval_writer.write(f"{episode},{success},{score}\n")
-                self.eval_writer.flush()
-                logger.info(
-                    f"Recorded evaluation for episode {episode}: success={success}, score={score}"
-                )
+            self.eval_writer.write(f"{episode},{success},{score},{elapsed_time:.2f}\n")
+            self.eval_writer.flush()
+            logger.info(
+                f"Recorded evaluation for episode {episode}: success={success}, score={score}, time={elapsed_time:.2f} seconds."
+            )
         else:
             logger.debug("Evaluation writer is not set. Skipping evaluation.")
 
