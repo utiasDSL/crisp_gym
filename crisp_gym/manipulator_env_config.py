@@ -16,6 +16,29 @@ from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_i
 from crisp_gym.util.gripper_mode import GripperMode
 
 
+class ObservationKeys:
+    """Standardized keys for observations in manipulator environments."""
+
+    STATE_OBS = "observation.state"
+
+    GRIPPER_OBS = STATE_OBS + ".gripper"
+    JOINT_OBS = STATE_OBS + ".joints"
+    CARTESIAN_OBS = STATE_OBS + ".cartesian"
+    TARGET_OBS = STATE_OBS + ".target"
+    SENSOR_OBS = STATE_OBS + ".sensors"
+
+    IMAGE_OBS = "observation.images"
+
+
+ALLOWED_STATE_OBS_KEYS = {
+    ObservationKeys.GRIPPER_OBS,
+    ObservationKeys.JOINT_OBS,
+    ObservationKeys.CARTESIAN_OBS,
+    ObservationKeys.TARGET_OBS,
+    ObservationKeys.SENSOR_OBS,
+}
+
+
 @dataclass(kw_only=True)
 class ManipulatorEnvConfig(ABC):
     """Manipulator Gym Environment Configuration.
@@ -47,7 +70,6 @@ class ManipulatorEnvConfig(ABC):
     sensor_configs: List[SensorConfig] = field(default_factory=lambda: [])
 
     gripper_mode: GripperMode | str = GripperMode.ABSOLUTE_CONTINUOUS
-    gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_threshold: float = 0.1
 
     xyz_min: List[float] = field(default_factory=lambda: [-10.0, -10.0, -10.0])
@@ -55,14 +77,39 @@ class ManipulatorEnvConfig(ABC):
 
     max_episode_steps: int | None = None
 
+    gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
+    gripper_continuous_control: bool | None = None  # Deprecated, use gripper_mode instead
+
     def __post_init__(self):
         """Post-initialization checks."""
         if self.gripper_enabled is not None:
             logging.warning(
                 "Deprecated: 'gripper_enabled' is deprecated, use 'gripper_mode' instead to set the control mode."
             )
+        if self.gripper_continuous_control is not None:
+            logging.warning(
+                "Deprecated: 'gripper_continuous_control' is deprecated, use 'gripper_mode' instead to set the control mode."
+            )
+
         if isinstance(self.gripper_mode, str):
             self.gripper_mode = GripperMode(self.gripper_mode)
+
+    def get_metadata(self) -> dict:
+        """Get metadata about the environment configuration.
+
+        Returns:
+            dict: Metadata dictionary containing control frequency, robot type, gripper type, and camera names.
+        """
+        return {
+            "robot_config": self.robot_config.__dict__,
+            "gripper_config": self.gripper_config.__dict__ if self.gripper_config else "None",
+            "camera_config": [camera.__dict__ for camera in self.camera_configs],
+            "sensor_config": [sensor.__dict__ for sensor in self.sensor_configs],
+            "gripper_mode": str(self.gripper_mode),
+            "gripper_threshold": self.gripper_threshold,
+            "cartesian_control_param_config": str(self.cartesian_control_param_config),
+            "joint_control_param_config": str(self.joint_control_param_config),
+        }
 
     @classmethod
     def from_yaml(cls, yaml_path: Path, **overrides) -> "ManipulatorEnvConfig":  # noqa: ANN003

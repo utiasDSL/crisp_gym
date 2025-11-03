@@ -1,6 +1,6 @@
 [project]
 name = "crisp-gym"
-version = "3.2.0"
+version = "3.2.3"
 description = "Simple gymnasium environments for crisp_py"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,6 +16,10 @@ authors = [
     {name="Daniel San Jose Pro", email="sanjose.daniel@gmail.com"},
 ]
 
+[project.scripts]
+crisp-deploy-policy = "crisp_gym.scripts.deploy_policy:main"
+crisp-record-leader-follower = "crisp_gym.scripts.record_lerobot_format_leader_follower:main"
+crisp-check-config = "crisp_gym.scripts.check_config:main"
 
 [tool.ruff]
 exclude = [

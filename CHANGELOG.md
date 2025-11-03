@@ -1,5 +1,29 @@
 # Changelog
 
+## [3.2.3](https://github.com/utiasDSL/crisp_gym/compare/v3.2.2...v3.2.3) (2025-10-15)
+
+
+### Bug Fixes
+
+* ruff check ([27687f7](https://github.com/utiasDSL/crisp_gym/commit/27687f7434aa8c67920bee288429cc2e3fe95d47))
+
+## [3.2.2](https://github.com/utiasDSL/crisp_gym/compare/v3.2.1...v3.2.2) (2025-10-15)
+
+
+### Bug Fixes
+
+* add crisp_gym config to config paths ([1e738b5](https://github.com/utiasDSL/crisp_gym/commit/1e738b530515e22c535532fb6fe235ba59bb0286))
+* Deploy script get_features function had wrong arguments ([873531d](https://github.com/utiasDSL/crisp_gym/commit/873531d0e2aaec0816fe2bbe5f18a41497067bc1))
+* gripper action needs clipping ([39df148](https://github.com/utiasDSL/crisp_gym/commit/39df1481e933110060031d0e43b7ef6cb2da8992))
+
+## [3.2.1](https://github.com/utiasDSL/crisp_gym/compare/v3.2.0...v3.2.1) (2025-10-14)
+
+
+### Bug Fixes
+
+* Add deprecation warning for old parameters ([a339dfe](https://github.com/utiasDSL/crisp_gym/commit/a339dfe3997855e41b4d31d52e3f623450d78eee))
+* gripper mode not properly initialized ([a7528e9](https://github.com/utiasDSL/crisp_gym/commit/a7528e9e7ee0816e208d096a8a83b649d5d29e78))
+
 ## [3.2.0](https://github.com/utiasDSL/crisp_gym/compare/v3.1.0...v3.2.0) (2025-10-13)
 
 

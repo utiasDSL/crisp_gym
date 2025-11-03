@@ -29,6 +29,8 @@ def _parse_config_paths(path_str: str) -> List[Path]:
 
 default_path = Path(str(files("crisp_py").joinpath("config")))
 CRISP_CONFIG_PATHS = [default_path]
+default_gym_path = Path(str(files("crisp_gym").joinpath("config")))
+CRISP_CONFIG_PATHS.append(default_gym_path)
 CRISP_CONFIG_PATH = default_path
 
 if CRISP_CONFIG_PATH_STR is not None:
