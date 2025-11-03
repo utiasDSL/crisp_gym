@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.3](https://github.com/utiasDSL/crisp_gym/compare/v3.2.2...v3.2.3) (2025-10-15)
+
+
+### Bug Fixes
+
+* ruff check ([27687f7](https://github.com/utiasDSL/crisp_gym/commit/27687f7434aa8c67920bee288429cc2e3fe95d47))
+
 ## [3.2.2](https://github.com/utiasDSL/crisp_gym/compare/v3.2.1...v3.2.2) (2025-10-15)
 
 
