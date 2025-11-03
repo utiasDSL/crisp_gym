@@ -11,5 +11,5 @@ push_to_hub: false
 
 # System configuration
 use_sound: true
-queue_size: 16
+queue_size: 32
 writer_timeout: 10.0
