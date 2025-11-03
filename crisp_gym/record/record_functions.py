@@ -163,7 +163,7 @@ def inference_worker(
 
         logger.info(f"[Inference] Loading training config from {pretrained_path}...")
         train_config = TrainPipelineConfig.from_pretrained(pretrained_path)
-        logger.info(f"[Inference] Loaded training config: {train_config}")
+        logger.info("[Inference] Loaded training config.")
 
         if train_config.policy is None:
             raise ValueError(
@@ -175,19 +175,17 @@ def inference_worker(
         policy_cls = get_policy_class(train_config.policy.type)
         policy = policy_cls.from_pretrained(pretrained_path)
 
-        logging.info(
+        logger.info(
             f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
         )
         policy.reset()
         policy.to(device).eval()
 
         warmup_obs_raw = env.observation_space.sample()
-        logging.info(f"[Inference] Warm-up observation keys: {list(warmup_obs_raw.keys())}")
         warmup_obs_raw["observation.state"] = concatenate_state_features(warmup_obs_raw)
-        logging.info(f"[Inference] Warm-up observation keys: {list(warmup_obs_raw.keys())}")
         warmup_obs = numpy_obs_to_torch(warmup_obs_raw)
 
-        logging.info("[Inference] Warming up policy...")
+        logger.info("[Inference] Warming up policy...")
         elapsed_list = []
         with torch.inference_mode():
             import time
@@ -205,19 +203,19 @@ def inference_worker(
         std_elapsed = np.std(elapsed_list)
         max_elapsed = max(elapsed_list)
         min_elapsed = min(elapsed_list)
-        logging.info(
+        logger.info(
             f"[Inference] Warm-up timing over 100 runs: "
             f"avg={avg_elapsed * 1000:.2f}ms, std={std_elapsed * 1000:.2f}ms, max={max_elapsed * 1000:.2f}ms, min={min_elapsed * 1000:.2f}ms"
         )
 
-        logging.info("[Inference] Warm-up complete")
+        logger.info("[Inference] Warm-up complete")
 
         while True:
             obs_raw = conn.recv()
             if obs_raw is None:
                 break
             if obs_raw == "reset":
-                logging.info("[Inference] Resetting policy")
+                logger.info("[Inference] Resetting policy")
                 policy.reset()
                 continue
 
@@ -225,13 +223,13 @@ def inference_worker(
                 obs = numpy_obs_to_torch(obs_raw)
                 action = policy.select_action(obs)
 
-            logging.debug(f"[Inference] Computed action: {action}")
+            logger.debug(f"[Inference] Computed action: {action}")
             conn.send(action)
     except Exception as e:
         logger.exception(f"[Inference] Exception in inference worker: {e}")
 
     conn.close()
-    logging.info("[Inference] Worker shutting down")
+    logger.info("[Inference] Worker shutting down")
 
 
 def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable:
