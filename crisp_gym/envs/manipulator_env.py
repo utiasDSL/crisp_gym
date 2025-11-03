@@ -28,13 +28,14 @@ import os
 from pathlib import Path
 from typing import Any, List, Tuple
 
+from crisp_py.utils.geometry import OrientationRepresentation
 import gymnasium as gym
 import numpy as np
 import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
-from crisp_py.sensors.sensor import make_sensor
+from crisp_py.sensors.sensor import Sensor, make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
@@ -90,7 +91,7 @@ class ManipulatorBaseEnv(gym.Env):
             for camera_config in self.config.camera_configs
         ]
         self.sensors: List = [
-            make_sensor(
+            Sensor(
                 namespace=namespace,
                 sensor_config=sensor_config,
             )
@@ -432,7 +433,7 @@ class ManipulatorBaseEnv(gym.Env):
 
         Returns:
             Rotation: A scipy Rotation object representing the rotation.
-        """  # noqa: D205
+        """
         if self.config.orientation_representation == OrientationRepresentation.EULER:
             return Rotation.from_euler("xyz", rot_action)
         elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
@@ -446,8 +447,10 @@ class ManipulatorBaseEnv(gym.Env):
 
     def clip_position_for_safety(self, position: np.ndarray) -> np.ndarray:
         """Clip the position to ensure safety.
+
         Args:
             position (np.ndarray): The position to be clipped.
+
         Returns:
             np.ndarray: The clipped position.
         """
@@ -534,7 +537,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         """Step the environment with a Cartesian action.
 
         Args:
-            action (np.ndarray): Cartesian delta action [dx, dy, dz, roll, pitch, yaw, gripper_action].
+            action (np.ndarray): Cartesian delta action [dx, dy, dz, *d_rot_action, gripper_action],
+                                where d_rot_action dimension depends on the chosen orientation representation.
             block (bool): If True, block to maintain the control rate.
 
         Returns:
@@ -543,12 +547,12 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         assert action.shape == self.action_space.shape, (
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
-        # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
+        translation = action[:3]
+        rotation = self.action_to_rotation(action[3:-1])
 
-        translation, rotation = action[:3], Rotation.from_euler("xyz", action[3:6])
-
-        target_position = self.robot.target_pose.position + translation
-        target_position[2] = max(target_position[2], self._min_z_height)
+        target_position = self.clip_position_for_safety(
+            self.robot.target_pose.position + translation
+        )
         target_orientation = rotation * self.robot.target_pose.orientation
 
         target_pose = Pose(position=target_position, orientation=target_orientation)

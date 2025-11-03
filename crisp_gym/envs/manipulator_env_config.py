@@ -27,7 +27,7 @@ class ObservationKeys:
     JOINT_OBS = STATE_OBS + ".joints"
     CARTESIAN_OBS = STATE_OBS + ".cartesian"
     TARGET_OBS = STATE_OBS + ".target"
-    SENSOR_OBS = STATE_OBS + ".sensors"
+    SENSOR_OBS = STATE_OBS + ".sensor"
 
     IMAGE_OBS = "observation.images"
 
@@ -172,22 +172,32 @@ class ManipulatorEnvConfig(ABC):
         Returns:
             ManipulatorEnvConfig: Configured environment instance
         """
-        # TODO: @danielsanjosepro Better validation of YAML contents
         with open(yaml_path, "r") as f:
-            data = yaml.safe_load(f) or {}
+            original_data = yaml.safe_load(f) or {}
 
-        # Apply overrides
-        data.update(overrides)
+        original_data.update(overrides)
 
-        # Handle nested configs that need special treatment
-        if "robot_config" in data and isinstance(data["robot_config"], dict):
-            # Use make_robot_config to handle different robot types
-            data["robot_config"] = make_robot_config(**data["robot_config"])
+        data = dict(original_data)  # Make a shallow copy to modify
 
-        if "gripper_config" in data and isinstance(data["gripper_config"], dict):
+        if "robot_config" in data:
+            if not isinstance(data["robot_config"], dict):
+                raise ValueError("robot_config must be a dictionary in the YAML file.")
+
+            if "from_yaml" in data["robot_config"]:
+                robot_yaml_path = find_config(data["robot_config"]["from_yaml"])
+                if robot_yaml_path is None:
+                    raise FileNotFoundError(
+                        f"Robot config file '{data['robot_config']['from_yaml']}' not found in any CRISP config paths"
+                    )
+                data["robot_config"] = RobotConfig.from_yaml(yaml_path=robot_yaml_path.resolve())
+            else:
+                data["robot_config"] = make_robot_config(**data["robot_config"])
+
+        if "gripper_config" in data:
             gripper_cfg = data["gripper_config"]
+            if not isinstance(gripper_cfg, dict):
+                raise ValueError("gripper_config must be a dictionary in the YAML file.")
             if "from_yaml" in gripper_cfg:
-                # Load from external YAML file
                 gripper_yaml_path = find_config(gripper_cfg["from_yaml"])
                 if gripper_yaml_path is None:
                     raise FileNotFoundError(
@@ -198,16 +208,38 @@ class ManipulatorEnvConfig(ABC):
                 data["gripper_config"] = GripperConfig(**gripper_cfg)
 
         if "camera_configs" in data and isinstance(data["camera_configs"], list):
-            data["camera_configs"] = [
-                CameraConfig(**cam_cfg) if isinstance(cam_cfg, dict) else cam_cfg
-                for cam_cfg in data["camera_configs"]
-            ]
+            data["camera_configs"] = []  # Reset to fill in properly
+            for camera_cfg in original_data["camera_configs"]:
+                if "from_yaml" in camera_cfg:
+                    camera_yaml_path = find_config(camera_cfg["from_yaml"])
+                    if camera_yaml_path is None:
+                        raise FileNotFoundError(
+                            f"Camera config file '{camera_cfg['from_yaml']}' not found in any CRISP config paths"
+                        )
+                    cam_config = CameraConfig.from_yaml(yaml_path=camera_yaml_path.resolve())
+                    data["camera_configs"].append(cam_config)
+                else:
+                    data["camera_configs"].append(
+                        CameraConfig(**camera_cfg) if isinstance(camera_cfg, dict) else camera_cfg
+                    )
 
         if "sensor_configs" in data and isinstance(data["sensor_configs"], list):
-            data["sensor_configs"] = [
-                SensorConfig(**sensor_cfg) if isinstance(sensor_cfg, dict) else sensor_cfg
-                for sensor_cfg in data["sensor_configs"]
-            ]
+            data["sensor_configs"] = []
+            for sensor_config in original_data["sensor_configs"]:
+                if "from_yaml" in sensor_config:
+                    sensor_yaml_path = find_config(sensor_config["from_yaml"])
+                    if sensor_yaml_path is None:
+                        raise FileNotFoundError(
+                            f"Sensor config file '{sensor_config['from_yaml']}' not found in any CRISP config paths"
+                        )
+                    sensor_cfg = SensorConfig.from_yaml(yaml_path=sensor_yaml_path.resolve())
+                    data["sensor_configs"].append(sensor_cfg)
+                else:
+                    data["sensor_configs"].append(
+                        SensorConfig(**sensor_config)
+                        if isinstance(sensor_config, dict)
+                        else sensor_config
+                    )
 
         return cls(**data)
 
