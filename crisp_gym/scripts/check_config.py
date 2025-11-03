@@ -80,7 +80,7 @@ def main():
 
     print("Testing configuration file search...")
 
-    test_files = ["envs", "control"]
+    test_files = ["envs", "control", "robots", "cameras", "sensors", "grippers", "teleop"]
 
     for filename in test_files:
         result = find_config(filename)
