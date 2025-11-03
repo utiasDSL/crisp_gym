@@ -56,7 +56,7 @@ def main():
     parser.add_argument(
         "--push-to-hub",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Whether to push the dataset to the Hugging Face Hub.",
     )
     parser.add_argument(
