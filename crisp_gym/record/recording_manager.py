@@ -217,13 +217,6 @@ class RecordingManager(ABC):
                             )
 
                     logger.info("Saving current episode to dataset.")
-                    # Check if there are frames in the current episode buffer
-                    if hasattr(dataset, "_episode_buffer") and len(dataset._episode_buffer) == 0:
-                        logger.warning("Episode buffer is empty. No frames to save.")
-                    else:
-                        logger.info(
-                            f"Saving episode with {len(getattr(dataset, '_episode_buffer', []))} frames."
-                        )
 
                     dataset.save_episode()
                     logger.info(

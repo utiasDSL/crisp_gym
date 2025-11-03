@@ -5,6 +5,7 @@ import datetime
 import logging
 import time
 from multiprocessing import Pipe, Process
+from pathlib import Path
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import home_close_to_table
@@ -87,7 +88,7 @@ def main():
         "--env-config",
         type=str,
         default=None,
-        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
+        help="Configuration name for the follower robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
         "--env-namespace",
@@ -120,7 +121,6 @@ def main():
 
     if args.path is None:
         logger.info(" No path provided. Searching for models in 'outputs/train' directory.")
-        from pathlib import Path
 
         # We check recursively in the 'outputs/train' directory for 'pretrained_model's recursively
         models_path = Path("outputs/train")
@@ -174,9 +174,6 @@ def main():
     try:
         ctrl_type = "cartesian" if not args.joint_control else "joint"
         env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
-        # TODO: Remove this hack!
-        env.config.robot_config.home_config = home_close_to_table
-        env.config.robot_config.time_to_home = 2.0
 
         # %% Prepare the dataset
         features = get_features(env)
@@ -209,8 +206,6 @@ def main():
             daemon=True,
         )
         inf_proc.start()
-
-        time.sleep(5.0)  # Give some time for the process to start
 
         logger.info("Homing robot before starting with recording.")
 
