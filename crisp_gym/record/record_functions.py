@@ -262,8 +262,6 @@ def make_policy_fn(env: ManipulatorBaseEnv, parent_conn: Connection) -> Callable
         logger.debug("Requesting action from policy...")
         obs_raw = env.get_obs()
 
-        from crisp_gym.util.lerobot_features import concatenate_state_features
-
         obs_raw["observation.state"] = concatenate_state_features(obs_raw)
 
         parent_conn.send(obs_raw)
