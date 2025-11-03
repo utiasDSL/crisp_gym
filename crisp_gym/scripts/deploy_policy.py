@@ -26,7 +26,7 @@ def main():
     parser.add_argument(
         "--repo-id",
         type=str,
-        default="test",
+        default=None,
         help="Repository ID for the dataset",
     )
     parser.add_argument(
@@ -111,6 +111,12 @@ def main():
     for arg, value in vars(args).items():
         logger.info(f"  {arg}: {value}")
     logger.info("-" * 40)
+
+    if args.repo_id is None:
+        args.repo_id = prompt.prompt(
+            "Please enter the repository ID for the dataset (e.g., 'username/dataset_name'):",
+        )
+        logger.info(f"Using repository ID: {args.repo_id}")
 
     if args.path is None:
         logger.info(" No path provided. Searching for models in 'outputs/train' directory.")
