@@ -16,6 +16,10 @@ authors = [
     {name="Daniel San Jose Pro", email="sanjose.daniel@gmail.com"},
 ]
 
+[project.scripts]
+crisp-deploy-policy = "crisp_gym.scripts.deploy_policy:main"
+crisp-record-leader-follower = "crisp_gym.scripts.record_lerobot_format_leader_follower:main"
+crisp-check-config = "crisp_gym.scripts.check_config:main"
 
 [tool.ruff]
 exclude = [
