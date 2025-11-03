@@ -5,7 +5,7 @@ import logging
 from gymnasium.spaces import Dict
 from rich import print
 
-from crisp_gym.manipulator_env import make_env
+from crisp_gym.envs.manipulator_env import make_env
 from crisp_gym.util.setup_logger import setup_logging
 
 logger = logging.getLogger(__name__)
