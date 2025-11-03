@@ -8,8 +8,8 @@ from multiprocessing import Pipe, Process
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import home_close_to_table
-from crisp_gym.manipulator_env import make_env
-from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.envs.manipulator_env import make_env
+from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.record.evaluate import Evaluator
 from crisp_gym.record.record_functions import inference_worker, make_policy_fn
 from crisp_gym.record.recording_manager import make_recording_manager
@@ -87,7 +87,7 @@ def main():
         "--env-config",
         type=str,
         default=None,
-        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
+        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/envs.manipulator_env_config.py`.",
     )
     parser.add_argument(
         "--env-namespace",

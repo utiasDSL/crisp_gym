@@ -6,11 +6,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
 
+import numpy as np
 import yaml
 from crisp_py.camera.camera_config import CameraConfig
 from crisp_py.gripper.gripper import GripperConfig
-from crisp_py.robot_config import FrankaConfig, RobotConfig, make_robot_config
-from crisp_py.sensors.sensor_config import SensorConfig, make_sensor_config
+from crisp_py.robot.robot_config import FrankaConfig, RobotConfig, make_robot_config
+from crisp_py.sensors.sensor_config import SensorConfig
+from crisp_py.utils.geometry import OrientationRepresentation
 
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
 from crisp_gym.util.gripper_mode import GripperMode
@@ -59,7 +61,9 @@ class ManipulatorEnvConfig(ABC):
         max_episode_steps (int | None): Maximum number of steps per episode, if applicable.
     """
 
-    control_frequency: float
+    control_frequency: float  # FIXME: This is not used if block=False. Remove?
+
+    # === Core Configurations ===
     robot_config: RobotConfig
     gripper_config: GripperConfig | None
     camera_configs: List[CameraConfig]
@@ -69,13 +73,24 @@ class ManipulatorEnvConfig(ABC):
 
     sensor_configs: List[SensorConfig] = field(default_factory=lambda: [])
 
+    # Gripper specific configurations
     gripper_mode: GripperMode | str = GripperMode.ABSOLUTE_CONTINUOUS
     gripper_threshold: float = 0.1
-
-    max_episode_steps: int | None = None
-
     gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_continuous_control: bool | None = None  # Deprecated, use gripper_mode instead
+
+    # Orientation representation
+    orientation_representation: OrientationRepresentation = OrientationRepresentation.EULER
+
+    # Safety limits
+    min_x_height: None | float = None
+    min_y_height: None | float = None
+    min_z_height: None | float = 0.0  # e.g., table height
+    max_x_height: None | float = None
+    max_y_height: None | float = None
+    max_z_height: None | float = None
+
+    max_episode_steps: int | None = None  # FIXME: This is not used. Remove?
 
     def __post_init__(self):
         """Post-initialization checks."""
@@ -90,6 +105,44 @@ class ManipulatorEnvConfig(ABC):
 
         if isinstance(self.gripper_mode, str):
             self.gripper_mode = GripperMode(self.gripper_mode)
+
+        if (
+            self.cartesian_control_param_config is not None
+            and not self.cartesian_control_param_config.exists()
+        ):
+            raise FileNotFoundError(
+                f"Cartesian control param config file not found: {self.cartesian_control_param_config}"
+            )
+
+        if (
+            self.joint_control_param_config is not None
+            and not self.joint_control_param_config.exists()
+        ):
+            raise FileNotFoundError(
+                f"Joint control param config file not found: {self.joint_control_param_config}"
+            )
+
+        if self.orientation_representation not in [OrientationRepresentation.EULER]:
+            raise NotImplementedError(
+                f"Only Euler representation is supported for now. Got {self.orientation_representation}"
+            )
+
+        self.safety_box = {
+            "lower": np.array(
+                [
+                    self.min_x_height or -float("inf"),
+                    self.min_y_height or -float("inf"),
+                    self.min_z_height or -float("inf"),
+                ]
+            ),
+            "upper": np.array(
+                [
+                    self.max_x_height or float("inf"),
+                    self.max_y_height or float("inf"),
+                    self.max_z_height or float("inf"),
+                ]
+            ),
+        }
 
     def get_metadata(self) -> dict:
         """Get metadata about the environment configuration.
@@ -119,6 +172,7 @@ class ManipulatorEnvConfig(ABC):
         Returns:
             ManipulatorEnvConfig: Configured environment instance
         """
+        # TODO: @danielsanjosepro Better validation of YAML contents
         with open(yaml_path, "r") as f:
             data = yaml.safe_load(f) or {}
 
@@ -151,7 +205,7 @@ class ManipulatorEnvConfig(ABC):
 
         if "sensor_configs" in data and isinstance(data["sensor_configs"], list):
             data["sensor_configs"] = [
-                make_sensor_config(**sensor_cfg) if isinstance(sensor_cfg, dict) else sensor_cfg
+                SensorConfig(**sensor_cfg) if isinstance(sensor_cfg, dict) else sensor_cfg
                 for sensor_cfg in data["sensor_configs"]
             ]
 
@@ -159,7 +213,7 @@ class ManipulatorEnvConfig(ABC):
 
 
 # === Franka Robotics FR3 Environment Configurations ===
-@dataclass
+@dataclass(kw_only=True)
 class FrankaEnvConfig(ManipulatorEnvConfig, ABC):
     """Franka Gym Environment Configuration."""
 
@@ -182,9 +236,6 @@ class FrankaEnvConfig(ManipulatorEnvConfig, ABC):
 class NoCamFrankaEnvConfig(FrankaEnvConfig):
     """Franka Gym Environment Configuration."""
 
-    gripper_continuous_control: bool = True
-    gripper_enabled: bool = False
-
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig(min_value=0, max_value=1)
     )
@@ -195,8 +246,6 @@ class NoCamFrankaEnvConfig(FrankaEnvConfig):
 @dataclass
 class LeftNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
     """Franka Gym Environment Configuration for the left robot without cameras."""
-
-    gripper_enabled: bool = True
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
@@ -210,8 +259,6 @@ class LeftNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
 @dataclass
 class RightNoCamFrankaEnvConfig(NoCamFrankaEnvConfig):
     """Franka Gym Environment Configuration for the right robot without cameras."""
-
-    gripper_enabled: bool = True
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
@@ -242,7 +289,7 @@ class OnlyWristCamFrankaEnvConfig(FrankaEnvConfig):
             CameraConfig(
                 camera_name="camera",
                 camera_frame="wrist_link",
-                resolution=(256, 256),
+                resolution=[256, 256],
                 camera_color_image_topic="camera/wrist_camera/color/image_rect_raw",
                 camera_color_info_topic="camera/wrist_camera/color/camera_info",
             ),
@@ -256,8 +303,6 @@ class AlohaFrankaEnvConfig(FrankaEnvConfig):
 
     # The aloha gripper can be controlled in a continuous manner, so we set this to True.
     # For more information on the gripper, check: https://github.com/TUM-LSY/aloha4franka
-    gripper_enabled: bool = True
-    gripper_continuous_control: bool = True
 
     gripper_config: GripperConfig | None = field(
         default_factory=lambda: GripperConfig.from_yaml(
@@ -288,14 +333,14 @@ class LeftAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
             CameraConfig(
                 camera_name="primary",
                 camera_frame="primary_link",
-                resolution=(256, 256),
+                resolution=[256, 256],
                 camera_color_image_topic="left_third_person_camera/color/image_raw",
                 camera_color_info_topic="left_third_person_camera/color/camera_info",
             ),
             CameraConfig(
                 camera_name="wrist",
                 camera_frame="wrist_link",
-                resolution=(256, 256),
+                resolution=[256, 256],
                 camera_color_image_topic="left_wrist_camera/color/image_rect_raw",
                 camera_color_info_topic="left_wrist_camera/color/camera_info",
             ),
@@ -320,14 +365,14 @@ class RightAlohaFrankaEnvConfig(AlohaFrankaEnvConfig):
             CameraConfig(
                 camera_name="primary",
                 camera_frame="primary_link",
-                resolution=(256, 256),
+                resolution=[256, 256],
                 camera_color_image_topic="right_third_person_camera/color/image_raw",
                 camera_color_info_topic="right_third_person_camera/color/camera_info",
             ),
             CameraConfig(
                 camera_name="wrist",
                 camera_frame="wrist_link",
-                resolution=(256, 256),
+                resolution=[256, 256],
                 camera_color_image_topic="right_wrist_camera/color/image_rect_raw",
                 camera_color_info_topic="right_wrist_camera/color/camera_info",
             ),
@@ -344,7 +389,7 @@ class NoCamNoGripperFrankaEnvConfig(FrankaEnvConfig):
     )
     camera_configs: List[CameraConfig] = field(default_factory=lambda: [])
 
-    gripper_enabled: bool = False
+    gripper_mode: GripperMode | str = GripperMode.NONE
 
 
 def make_env_config(
@@ -367,7 +412,6 @@ def make_env_config(
     """
     config_class = STRING_TO_CONFIG.get(env_type.lower())
     if config_class is None:
-        # Try to find YAML config if not in predefined types
         config_path = find_config("envs/" + env_type.lower() + ".yaml")
         if config_path is None:
             raise ValueError(

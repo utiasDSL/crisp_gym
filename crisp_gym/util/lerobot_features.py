@@ -11,7 +11,7 @@ import gymnasium
 import numpy as np
 import rich
 
-from crisp_gym.manipulator_env import ManipulatorBaseEnv, make_env
+from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, make_env
 from crisp_gym.util.control_type import ControlType
 
 try:
