@@ -15,6 +15,7 @@ from lerobot.policies.factory import get_policy_class
 
 from crisp_gym.util.control_type import ControlType
 from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
+from crisp_gym.util.setup_logger import setup_logging
 
 if TYPE_CHECKING:
     from multiprocessing.connection import Connection

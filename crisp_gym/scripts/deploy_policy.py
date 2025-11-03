@@ -19,7 +19,10 @@ from crisp_gym.util.setup_logger import setup_logging
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Record data in Lerobot Format")
+    """Deploy a pretrained policy and record deployment data in Lerobot Format."""
+    parser = argparse.ArgumentParser(
+        description="Deploy a pretrained policy and record data in Lerobot Format"
+    )
     parser.add_argument(
         "--repo-id",
         type=str,
