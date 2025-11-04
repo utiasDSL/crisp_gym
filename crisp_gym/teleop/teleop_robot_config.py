@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 from crisp_py.gripper import GripperConfig
-from crisp_py.robot_config import FrankaConfig, make_robot_config
+from crisp_py.robot import FrankaConfig, make_robot_config
 
 from crisp_gym.config.path import CRISP_CONFIG_PATH, find_config, list_configs_in_folder
 

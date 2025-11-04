@@ -11,7 +11,7 @@ from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 from typing_extensions import override
 
-from crisp_gym.manipulator_env import ManipulatorBaseEnv
+from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv
 from crisp_gym.policy.policy import Action, Observation, Policy, register_policy
 from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
 from crisp_gym.util.setup_logger import setup_logging

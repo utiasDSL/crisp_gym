@@ -78,13 +78,13 @@ def main():
         "--leader-config",
         type=str,
         default=None,
-        help="Configuration name for the leader robot. Define your own configuration in `crisp_gym/teleop/teleop_robot_config.py`.",
+        help="Configuration name for the leader robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
         "--follower-config",
         type=str,
         default=None,
-        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/envs.manipulator_env_config.py`.",
+        help="Configuration name for the leader robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
         "--follower-namespace",
