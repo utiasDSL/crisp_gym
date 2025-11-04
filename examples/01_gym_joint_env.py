@@ -2,8 +2,8 @@
 
 import numpy as np
 
-from crisp_gym.manipulator_env import ManipulatorJointEnv
-from crisp_gym.manipulator_env_config import FrankaEnvConfig
+from crisp_gym.envs.manipulator_env import ManipulatorJointEnv
+from crisp_gym.envs.manipulator_env_config import FrankaEnvConfig
 
 # === Configuration ===
 START_POSITION = np.array([0.4, 0.0, 0.4])
@@ -12,7 +12,7 @@ N_JOINTS = 7
 CTRL_FREQ = 10
 
 # === Initialize environment ===
-env_config = FrankaEnvConfig(control_frequency=CTRL_FREQ)
+env_config = FrankaEnvConfig(control_frequency=CTRL_FREQ, gripper_config=None, camera_configs=[])
 env = ManipulatorJointEnv(namespace="right", config=env_config)
 
 print("Moving to start position...")

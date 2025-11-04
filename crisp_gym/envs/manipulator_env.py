@@ -4,7 +4,7 @@ To use an environment, you can use the `make_env` function to create an instance
 
 Example:
 ```python
-from crisp_gym import make_env
+from crisp_gym.envs import make_env
 
 env = make_env(
     env_type="manipulator_cartesian",
@@ -28,18 +28,19 @@ import os
 from pathlib import Path
 from typing import Any, List, Tuple
 
+from crisp_py.utils.geometry import OrientationRepresentation
 import gymnasium as gym
 import numpy as np
 import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
-from crisp_py.sensors.sensor import make_sensor
+from crisp_py.sensors.sensor import Sensor, make_sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
 
-from crisp_gym.manipulator_env_config import (
+from crisp_gym.envs.manipulator_env_config import (
     ManipulatorEnvConfig,
     ObservationKeys,
     make_env_config,
@@ -90,7 +91,7 @@ class ManipulatorBaseEnv(gym.Env):
             for camera_config in self.config.camera_configs
         ]
         self.sensors: List = [
-            make_sensor(
+            Sensor(
                 namespace=namespace,
                 sensor_config=sensor_config,
             )
@@ -424,6 +425,45 @@ class ManipulatorBaseEnv(gym.Env):
         self.robot.wait_until_ready()
         self.switch_to_default_controller()
 
+    def action_to_rotation(self, rot_action: np.ndarray) -> Rotation:
+        """Convert the rotation part of the action to a Rotation object.
+
+        Args:
+            rot_action (np.ndarray): Rotation action for the environment. Dimension depends on the chosen orientation representation.
+
+        Returns:
+            Rotation: A scipy Rotation object representing the rotation.
+        """
+        if self.config.orientation_representation == OrientationRepresentation.EULER:
+            return Rotation.from_euler("xyz", rot_action)
+        elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
+            return Rotation.from_quat(rot_action)
+        elif self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS:
+            return Rotation.from_rotvec(rot_action)
+        else:
+            raise ValueError(
+                f"Unsupported orientation representation: {self.config.orientation_representation}"
+            )
+
+    def clip_position_for_safety(self, position: np.ndarray) -> np.ndarray:
+        """Clip the position to ensure safety.
+
+        Args:
+            position (np.ndarray): The position to be clipped.
+
+        Returns:
+            np.ndarray: The clipped position.
+        """
+        if self.config.safety_box is None:
+            return position
+
+        clipped_position = np.clip(
+            position,
+            self.config.safety_box["lower"],
+            self.config.safety_box["upper"],
+        )
+        return clipped_position
+
 
 class ManipulatorCartesianEnv(ManipulatorBaseEnv):
     """Manipulator Cartesian Environment.
@@ -443,7 +483,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.ctrl_type = ControlType.CARTESIAN
 
         # TODO: Make this configurable
-        self._min_z_height = 0.0
+        self._min_z_height = 0.0425
 
         self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
             {
@@ -497,7 +537,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         """Step the environment with a Cartesian action.
 
         Args:
-            action (np.ndarray): Cartesian delta action [dx, dy, dz, roll, pitch, yaw, gripper_action].
+            action (np.ndarray): Cartesian delta action [dx, dy, dz, *d_rot_action, gripper_action],
+                                where d_rot_action dimension depends on the chosen orientation representation.
             block (bool): If True, block to maintain the control rate.
 
         Returns:
@@ -506,12 +547,12 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         assert action.shape == self.action_space.shape, (
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
-        # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
+        translation = action[:3]
+        rotation = self.action_to_rotation(action[3:-1])
 
-        translation, rotation = action[:3], Rotation.from_euler("xyz", action[3:6])
-
-        target_position = self.robot.target_pose.position + translation
-        target_position[2] = max(target_position[2], self._min_z_height)
+        target_position = self.clip_position_for_safety(
+            self.robot.target_pose.position + translation
+        )
         target_orientation = rotation * self.robot.target_pose.orientation
 
         target_pose = Pose(position=target_position, orientation=target_orientation)
@@ -521,6 +562,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[-1])
 
         if block:
+            # FIXME: This control rate sleep is never used and if used by the user
+            # unexpected behavior occurs.
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)
@@ -617,6 +660,8 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[-1])
 
         if block:
+            # FIXME: This control rate sleep is never used and if used by the user
+            # unexpected behavior occurs.
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)

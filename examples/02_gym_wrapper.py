@@ -2,9 +2,9 @@
 
 import numpy as np
 
-from crisp_gym.env_wrapper import RecedingHorizon, WindowWrapper
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import FrankaEnvConfig
+from crisp_gym.envs.env_wrapper import RecedingHorizon, WindowWrapper
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.envs.manipulator_env_config import FrankaEnvConfig
 
 # === Circle Parameters ===
 RADIUS = 0.1  # [m]
@@ -18,7 +18,7 @@ ACTION_HORIZON = 5
 WINDOW_SIZE = 2
 
 # === Environment Setup ===
-env_config = FrankaEnvConfig(control_frequency=CTRL_FREQ)
+env_config = FrankaEnvConfig(control_frequency=CTRL_FREQ, gripper_config=None, camera_configs=[])
 env = ManipulatorCartesianEnv(namespace="right", config=env_config)
 env = RecedingHorizon(env, horizon_length=ACTION_HORIZON)
 env = WindowWrapper(env, window_size=WINDOW_SIZE)

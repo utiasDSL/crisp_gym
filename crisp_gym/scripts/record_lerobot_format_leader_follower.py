@@ -10,8 +10,8 @@ import rclpy
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import HomeConfig
 from crisp_gym.config.path import CRISP_CONFIG_PATH
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
-from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv, make_env
+from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import make_teleop_fn, make_teleop_streamer_fn
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.teleop.teleop_robot import TeleopRobot, make_leader
@@ -84,7 +84,7 @@ def main():
         "--follower-config",
         type=str,
         default=None,
-        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
+        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/envs.manipulator_env_config.py`.",
     )
     parser.add_argument(
         "--follower-namespace",

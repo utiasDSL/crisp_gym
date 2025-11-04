@@ -19,6 +19,7 @@ import logging
 import time
 from contextlib import contextmanager
 from pathlib import Path
+import time
 
 from crisp_gym.util.prompt import prompt
 from crisp_gym.util.setup_logger import setup_logging
@@ -43,6 +44,10 @@ class Evaluator:
 
         self.start_time = None
 
+    def start_timer(self):
+        """Start the evaluation timer."""
+        self.start_time = time.time()
+
     @contextmanager
     def start_eval(self, overwrite: bool = True, activate: bool = True):
         """Context manager to handle the evaluation process."""
@@ -53,7 +58,7 @@ class Evaluator:
 
         if overwrite and self.output_file.exists():
             with self.output_file.open("w") as f:
-                f.write("episode,success,score\n")
+                f.write("episode,success,score,time\n")
 
         self.eval_writer = self.output_file.open("a")
 
@@ -109,9 +114,13 @@ class Evaluator:
 
 
 if __name__ == "__main__":
+    import random
+
     setup_logging(level=logging.INFO)
     evaluator = Evaluator("evaluation_results.csv")
     with evaluator.start_eval():
         for episode in range(1, 6):  # Simulating 5 episodes
+            evaluator.start_timer()
+            time.sleep(random.uniform(1.0, 3.0))
             evaluator.evaluate(episode)
-    logger.info("Evaluation completed and results saved.")
+    logger.info("Evaluation completed and results saved to evaluation_results.csv.")

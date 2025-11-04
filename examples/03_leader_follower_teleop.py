@@ -5,8 +5,8 @@ import time
 import numpy as np
 
 from crisp_gym.config.home import home_close_to_table, home_front_up
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv
-from crisp_gym.manipulator_env_config import make_env_config
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv
+from crisp_gym.envs.manipulator_env_config import make_env_config
 from crisp_gym.teleop.teleop_robot import TeleopRobot
 from crisp_gym.teleop.teleop_robot_config import make_leader_config
 
@@ -25,7 +25,6 @@ leader_config.leader_gripper.publish_frequency = 30.0
 leader_config.leader_gripper.max_delta = 0.15
 leader = TeleopRobot(config=leader_config)
 leader.wait_until_ready()
-leader.gripper.disable_torque()
 
 time.sleep(1.0)  # Wait for the gripper to disable torque
 
