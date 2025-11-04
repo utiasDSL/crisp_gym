@@ -27,7 +27,7 @@ class ObservationKeys:
     JOINT_OBS = STATE_OBS + ".joints"
     CARTESIAN_OBS = STATE_OBS + ".cartesian"
     TARGET_OBS = STATE_OBS + ".target"
-    SENSOR_OBS = STATE_OBS + ".sensor"
+    SENSOR_OBS = STATE_OBS + ".sensors"
 
     IMAGE_OBS = "observation.images"
 
