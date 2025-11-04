@@ -76,6 +76,7 @@ class ManipulatorEnvConfig(ABC):
     # Gripper specific configurations
     gripper_mode: GripperMode | str = GripperMode.ABSOLUTE_CONTINUOUS
     gripper_threshold: float = 0.1
+
     gripper_enabled: bool | None = None  # Deprecated, use gripper_mode instead
     gripper_continuous_control: bool | None = None  # Deprecated, use gripper_mode instead
 
@@ -83,12 +84,12 @@ class ManipulatorEnvConfig(ABC):
     orientation_representation: OrientationRepresentation = OrientationRepresentation.EULER
 
     # Safety limits
-    min_x_height: None | float = None
-    min_y_height: None | float = None
-    min_z_height: None | float = 0.0  # e.g., table height
-    max_x_height: None | float = None
-    max_y_height: None | float = None
-    max_z_height: None | float = None
+    min_x: None | float = None
+    min_y: None | float = None
+    min_z: None | float = 0.0  # e.g., table height
+    max_x: None | float = None
+    max_y: None | float = None
+    max_z: None | float = None
 
     max_episode_steps: int | None = None  # FIXME: This is not used. Remove?
 
@@ -130,16 +131,16 @@ class ManipulatorEnvConfig(ABC):
         self.safety_box = {
             "lower": np.array(
                 [
-                    self.min_x_height or -float("inf"),
-                    self.min_y_height or -float("inf"),
-                    self.min_z_height or -float("inf"),
+                    self.min_x or -float("inf"),
+                    self.min_y or -float("inf"),
+                    self.min_z or -float("inf"),
                 ]
             ),
             "upper": np.array(
                 [
-                    self.max_x_height or float("inf"),
-                    self.max_y_height or float("inf"),
-                    self.max_z_height or float("inf"),
+                    self.max_x or float("inf"),
+                    self.max_y or float("inf"),
+                    self.max_z or float("inf"),
                 ]
             ),
         }
