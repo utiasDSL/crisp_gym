@@ -4,15 +4,13 @@ import argparse
 import datetime
 import logging
 import time
-from multiprocessing import Pipe, Process
 from pathlib import Path
 
 import crisp_gym  # noqa: F401
-from crisp_gym.config.home import home_close_to_table
 from crisp_gym.manipulator_env import make_env
 from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.policy import make_policy
 from crisp_gym.record.evaluate import Evaluator
-from crisp_gym.record.record_functions import inference_worker, make_policy_fn
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
@@ -170,7 +168,7 @@ def main():
     else:
         evaluation_file = "evaluation_results.csv"
 
-    inf_proc = None
+    policy = None
     try:
         ctrl_type = "cartesian" if not args.joint_control else "joint"
         env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
@@ -192,20 +190,8 @@ def main():
         recording_manager.wait_until_ready()
 
         # %% Set up multiprocessing for policy inference
-        logger.info("Setting up multiprocessing for policy inference.")
-        parent_conn, child_conn = Pipe()
-
-        # Start inference process
-        inf_proc = Process(
-            target=inference_worker,
-            kwargs={
-                "conn": child_conn,
-                "pretrained_path": args.path,
-                "env": env,
-            },
-            daemon=True,
-        )
-        inf_proc.start()
+        logger.info("Setting up the policy.")
+        policy = make_policy("lerobot_policy", pretrained_path=args.path, env=env)
 
         logger.info("Homing robot before starting with recording.")
 
@@ -215,7 +201,7 @@ def main():
         def on_start():
             """Hook function to be called when starting a new episode."""
             env.reset()
-            parent_conn.send("reset")
+            policy.reset()
             evaluator.start_timer()
 
         def on_end():
@@ -225,7 +211,6 @@ def main():
             env.gripper.open()
 
             logger.info("Waiting for user to decide on success/failure if evaluating...")
-            time.sleep(3.0)
             if recording_manager.state != "exit":
                 evaluator.evaluate(episode=recording_manager.episode_count)
 
@@ -237,7 +222,7 @@ def main():
                     )
 
                     recording_manager.record_episode(
-                        data_fn=make_policy_fn(env, parent_conn),
+                        data_fn=policy.make_data_fn(),
                         task="Pick up the lego block.",
                         on_start=on_start,
                         on_end=on_end,
@@ -247,8 +232,7 @@ def main():
 
         # Shutdown inference process
         logger.info("Shutting down inference process.")
-        parent_conn.send(None)
-        inf_proc.join()
+        policy.shutdown()
 
         logger.info("Homing robot.")
         env.home()
@@ -259,9 +243,8 @@ def main():
         logger.info("Finished recording.")
     except Exception as e:
         logger.exception(e)
-        if inf_proc is not None and inf_proc.is_alive():
-            logger.info("Shutting down inference process due to exception.")
-            inf_proc.join()
+        if policy is not None:
+            policy.shutdown()
 
 
 if __name__ == "__main__":

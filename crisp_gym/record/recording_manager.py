@@ -23,6 +23,7 @@ from std_msgs.msg import String
 from typing_extensions import override
 
 from crisp_gym.config.path import find_config
+from crisp_gym.policy.policy import Action, Observation
 from crisp_gym.record.recording_manager_config import RecordingManagerConfig
 from crisp_gym.util.lerobot_features import concatenate_state_features
 
@@ -266,7 +267,7 @@ class RecordingManager(ABC):
 
     def record_episode(
         self,
-        data_fn: Callable[[], tuple[dict, dict]],
+        data_fn: Callable[[], tuple[Observation, Action]],
         task: str,
         on_start: Callable[[], None] | None = None,
         on_end: Callable[[], None] | None = None,
