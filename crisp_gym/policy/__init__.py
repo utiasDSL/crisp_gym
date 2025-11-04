@@ -11,4 +11,3 @@ __all__ = [
     "register_policy",
     "make_policy",
 ]
-

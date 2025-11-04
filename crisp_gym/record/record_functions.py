@@ -9,17 +9,10 @@ import logging
 from typing import TYPE_CHECKING, Callable
 
 import numpy as np
-import torch
-from lerobot.configs.train import TrainPipelineConfig
-from lerobot.policies.factory import get_policy_class, make_policy
 
 from crisp_gym.util.control_type import ControlType
-from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
-from crisp_gym.util.setup_logger import setup_logging
 
 if TYPE_CHECKING:
-    from multiprocessing.connection import Connection
-
     from crisp_gym.manipulator_env import ManipulatorBaseEnv, ManipulatorCartesianEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot
     from crisp_gym.teleop.teleop_sensor_stream import TeleopStreamedPose

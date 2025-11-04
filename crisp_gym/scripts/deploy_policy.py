@@ -3,7 +3,6 @@
 import argparse
 import datetime
 import logging
-import time
 from pathlib import Path
 
 import crisp_gym  # noqa: F401
