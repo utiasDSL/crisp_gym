@@ -35,7 +35,7 @@ import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
-from crisp_py.sensors.sensor import Sensor, make_sensor
+from crisp_py.sensors.sensor import Sensor
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
