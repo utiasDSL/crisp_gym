@@ -40,10 +40,9 @@ ruff = "*"
 
 [feature.lerobot.dependencies]
 pynput = "*"
-rerun-sdk = "==0.22.0"
 
 [feature.lerobot.pypi-dependencies]
-lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
+lerobot = { git = "https://github.com/huggingface/lerobot", rev = "74690e3f56a90b6ea314afbfb3b801a3d842a005", extras = ["smolvla"]}
 # lerobot = { path = "../lerobot", editable = false }
 
 [feature.humble]
