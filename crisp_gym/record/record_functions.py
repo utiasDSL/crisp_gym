@@ -49,9 +49,12 @@ def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamed
 
         gripper = leader.gripper.value if leader.gripper is not None else 0.0
 
+        # Use the environment's orientation representation for the rotation part
+        rot_action = env.rotation_to_representation(action_pose.orientation)
+
         action = np.concatenate(
             [
-                list(action_pose.position) + list(action_pose.orientation.as_euler("xyz")),
+                list(action_pose.position) + list(rot_action),
                 [gripper],
             ]
         )
@@ -109,9 +112,11 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
 
         action = None
         if env.ctrl_type is ControlType.CARTESIAN:
+            # Use the environment's orientation representation for the rotation part
+            rot_action = env.rotation_to_representation(action_pose.orientation)
             action = np.concatenate(
                 [
-                    list(action_pose.position) + list(action_pose.orientation.as_euler("xyz")),
+                    list(action_pose.position) + list(rot_action),
                     [gripper],
                 ]
             )
