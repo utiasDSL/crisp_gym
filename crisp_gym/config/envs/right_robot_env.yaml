@@ -3,7 +3,7 @@ gripper_mode: "absolute_continuous"
 max_episode_steps: 1000
 
 # NOTE: These are the defaults anyway
-observation_to_include_to_state:
+observations_to_include_to_state:
   - observation.state.cartesian
   - observation.state.gripper
   - observation.state.joints
