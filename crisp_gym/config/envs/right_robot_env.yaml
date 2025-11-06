@@ -1,6 +1,5 @@
 control_frequency: 30.0
-gripper_enabled: true
-gripper_continuous_control: true
+gripper_mode: "absolute_continuous"
 max_episode_steps: 1000
 
 cartesian_control_param_config: null  # Will use CRISP_CONFIG_PATH defaults
@@ -8,24 +7,36 @@ joint_control_param_config: null      # Will use CRISP_CONFIG_PATH defaults
 
 robot_config:
   robot_type: "franka"
-  # Optional FrankaConfig parameters - uses defaults if not specified
-  time_to_home: 5.0
+  time_to_home: 2.0
   publish_frequency: 50.0
+  home_config:
+    - -1.73960110e-02
+    - 9.55319758e-02
+    - 8.09703053e-04
+    - -1.94272034
+    - -4.01435784e-03
+    - 2.06584183
+    - 7.97426445e-01
 
 gripper_config:
   # Will be loaded from gripper_right.yaml via GripperConfig.from_yaml()
-  from_yaml: "gripper_right.yaml"
+  from_yaml: "grippers/gripper_right_v2.yaml"
 
 camera_configs:
   - camera_name: "primary"
     camera_frame: "primary_link"
     resolution: [256, 256]
-    camera_color_image_topic: "right_third_person_camera/color/image_raw"
-    camera_color_info_topic: "right_third_person_camera/color/camera_info"
+    camera_color_image_topic: "right_down_third_person_camera/color/image_raw"
+    camera_color_info_topic: "right_down_third_person_camera/color/camera_info"
   - camera_name: "wrist"
     camera_frame: "wrist_link" 
     resolution: [256, 256]
     camera_color_image_topic: "right_wrist_camera/color/image_rect_raw"
     camera_color_info_topic: "right_wrist_camera/color/camera_info"
 
-sensor_configs: []
+sensor_configs:
+  - sensor_type: "force_torque"
+    shape: [6,]
+    # buffer_size: 30
+    name: "ft_sensor"
+    data_topic: "/right/external_wrench"

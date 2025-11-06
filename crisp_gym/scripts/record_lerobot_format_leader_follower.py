@@ -236,6 +236,7 @@ def main():
             """Hook function to be called when starting a new episode."""
             env.robot.reset_targets()
             env.reset()
+            leader.gripper.disable_torque()
 
             # TODO: @danielsanjosepro: ask user for which controller to use.
             if isinstance(leader, TeleopRobot):

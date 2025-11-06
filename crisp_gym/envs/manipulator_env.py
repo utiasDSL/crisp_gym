@@ -334,6 +334,9 @@ class ManipulatorBaseEnv(gym.Env):
         self.robot.wait_until_ready()
         self.switch_to_default_controller()
 
+        if self.gripper is not None:
+            self.gripper.enable_torque()
+
         return self._get_obs(), {}
 
     @override
