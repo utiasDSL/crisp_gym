@@ -13,7 +13,6 @@ import numpy as np
 from crisp_gym.util.control_type import ControlType
 
 if TYPE_CHECKING:
-    from multiprocessing.connection import Connection
 
     from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, ManipulatorCartesianEnv
     from crisp_gym.teleop.teleop_robot import TeleopRobot

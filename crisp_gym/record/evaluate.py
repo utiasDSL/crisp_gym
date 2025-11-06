@@ -19,7 +19,6 @@ import logging
 import time
 from contextlib import contextmanager
 from pathlib import Path
-import time
 
 from crisp_gym.util.prompt import prompt
 from crisp_gym.util.setup_logger import setup_logging
@@ -43,10 +42,6 @@ class Evaluator:
         logger.info(f"Evaluator initialized. Results will be saved to {self.output_file}.")
 
         self.start_time = None
-
-    def start_timer(self):
-        """Start the evaluation timer."""
-        self.start_time = time.time()
 
     @contextmanager
     def start_eval(self, overwrite: bool = True, activate: bool = True):

@@ -28,7 +28,6 @@ import os
 from pathlib import Path
 from typing import Any, List, Tuple
 
-from crisp_py.utils.geometry import OrientationRepresentation
 import gymnasium as gym
 import numpy as np
 import rclpy
@@ -36,6 +35,7 @@ from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
 from crisp_py.sensors.sensor import Sensor
+from crisp_py.utils.geometry import OrientationRepresentation
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override

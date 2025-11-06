@@ -1,25 +1,22 @@
 """Asynchronous Lerobot Policy Module."""
 
 import logging
+from collections import deque
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from typing import Callable, Tuple
 
 import numpy as np
 import torch
-import time
-from collections import deque
-from lerobot.configs.train import TrainPipelineConfig
-from lerobot.policies.factory import get_policy_class
 from lerobot.configs.policies import PreTrainedConfig
-from lerobot.policies.utils import populate_queues
+from lerobot.configs.train import TrainPipelineConfig
 from lerobot.constants import OBS_IMAGES
+from lerobot.policies.factory import get_policy_class
+from lerobot.policies.utils import populate_queues
 from typing_extensions import override
 
 from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv
 from crisp_gym.policy.policy import Action, Observation, Policy, register_policy
-from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
-from crisp_gym.util.setup_logger import setup_logging
 
 
 @register_policy("async_lerobot_policy")
@@ -49,7 +46,6 @@ class AsyncLerobotPolicy(Policy):
             daemon=True,
         )
         self.inf_proc.start()
-        
 
     @override
     def make_data_fn(self) -> Callable[[], Tuple[Observation, Action]]:  # noqa: ANN002, ANN003
@@ -60,7 +56,6 @@ class AsyncLerobotPolicy(Policy):
          - Request chunks according to the replan_time parameter.
          - Each call executes one action from the current chunk and returns (obs, action) for sorting/recording.
         """
-
         # Before starting, fill the observation buffer
         obs_buf: deque = deque(maxlen=self.n_obs)
         for _ in range(self.n_obs):
@@ -76,26 +71,28 @@ class AsyncLerobotPolicy(Policy):
         current_chunk = None
 
         def _fn() -> tuple:
-            nonlocal i, next_chunk, current_chunk # Required to mutate across calls
-            if i==0:
-                if self.n_act==self.replan_time: # Edge case when we want to make a new prediction after all action chunks have been used up  
+            nonlocal i, next_chunk, current_chunk  # Required to mutate across calls
+            if i == 0:
+                if (
+                    self.n_act == self.replan_time
+                ):  # Edge case when we want to make a new prediction after all action chunks have been used up
                     obs_buf.append(self.env._get_obs())
                     self.parent_conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
                     print("Starting new inference")
                 next_chunk = self.parent_conn.recv()
-                current_chunk = next_chunk[self.n_act-self.replan_time:] 
-                print ("Length ot the new current chunk:",len(current_chunk))
+                current_chunk = next_chunk[self.n_act - self.replan_time :]
+                print("Length ot the new current chunk:", len(current_chunk))
 
             # execute action
             action = current_chunk[i]
-            print("Process element:",i)
+            print("Process element:", i)
             obs, *_ = self.env.step(action, block=False)
             obs_buf.append(obs)
 
             # Start prediction
-            if i ==(2*self.replan_time-self.n_act):
-                    self.parent_conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
-                    print("Starting new inference")
+            if i == (2 * self.replan_time - self.n_act):
+                self.parent_conn.send({"type": "OBS_SEQ", "obs_seq": list(obs_buf)})
+                print("Starting new inference")
 
             # step done
             i += 1
@@ -121,11 +118,12 @@ class AsyncLerobotPolicy(Policy):
         self.parent_conn.send(None)
         self.inf_proc.join()
 
+
 def inference_worker(  # noqa: D417
     conn: Connection,
     pretrained_path: str,
     env: ManipulatorBaseEnv,
-    steps: int| None,
+    steps: int | None,
     inpainting: bool,
     replan_time: int,
 ):  # noqa: ANN001
@@ -136,8 +134,8 @@ def inference_worker(  # noqa: D417
         pretrained_path (str): Path to the pretrained policy model.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
         steps (int): How many actions are executed from the prediction
-        inpainting (bool): Wether to use inpainting in the prediction of a new chunk or not 
-        replan_time (int): After how many steps to start predicting a new action chunk 
+        inpainting (bool): Wether to use inpainting in the prediction of a new chunk or not
+        replan_time (int): After how many steps to start predicting a new action chunk
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     train_config = TrainPipelineConfig.from_pretrained(pretrained_path)
@@ -149,22 +147,23 @@ def inference_worker(  # noqa: D417
     policy_cls = get_policy_class(train_config.policy.type)
 
     policy_config = PreTrainedConfig.from_pretrained(pretrained_path)
-    
+
     if steps is not None:
-        # Check if the number of steps make sense 
-        horizon=policy_config.horizon
-        if steps >= horizon: 
+        # Check if the number of steps make sense
+        horizon = policy_config.horizon
+        if steps >= horizon:
             raise ValueError(
-            f"The policy steps={steps} must be smaller than the horizon={horizon}."
-            "Please modify your cli."
-        )
+                f"The policy steps={steps} must be smaller than the horizon={horizon}."
+                "Please modify your cli."
+            )
         policy_config.n_action_steps = int(steps)
 
     if inpainting is True:
-        policy_config.inpainting_lengh = max(0, int(policy_config.n_action_steps) - int(replan_time))
-    
-    policy = policy_cls.from_pretrained(pretrained_path,config=policy_config)
+        policy_config.inpainting_lengh = max(
+            0, int(policy_config.n_action_steps) - int(replan_time)
+        )
 
+    policy = policy_cls.from_pretrained(pretrained_path, config=policy_config)
 
     logging.info(
         f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."
@@ -190,34 +189,38 @@ def inference_worker(  # noqa: D417
         if not (isinstance(msg, dict) and msg.get("type") == "OBS_SEQ"):
             logging.warning(f"[Inference] Unknown message: {type(msg)}")
             continue
-        
-        # We are recieving a list of dictonaries with the last observations 
+
+        # We are recieving a list of dictonaries with the last observations
         obs_seq = msg["obs_seq"]
 
         # Make the policy predict an action chunk for the current obeservation.
         # Therefore we follow the implementation on the Lerobot side for select_action() which calls predict_action_chunk()
         with torch.inference_mode():
             for i in range(n_obs):
-                last= obs_seq[i]
+                last = obs_seq[i]
 
                 # Implement numpy_obs_to_torch() here with env
                 # ToDo: make this a function and maybe avoid completly with new lerobot utils
                 state = np.concatenate([last["cartesian"][:6], last["gripper"]])
                 batch = {
                     "observation.state": torch.from_numpy(state)
-                        .unsqueeze(0)
-                        .to(device=device, dtype=torch.float32),
-                    "task": "", # TODO: Add task description if needed
+                    .unsqueeze(0)
+                    .to(device=device, dtype=torch.float32),
+                    "task": "",  # TODO: Add task description if needed
                 }
                 for cam in env.cameras:
                     img = last[f"{cam.config.camera_name}_image"]
                     batch[f"observation.images.{cam.config.camera_name}"] = (
-                        torch.from_numpy(img).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=torch.float32)/ 255
+                        torch.from_numpy(img)
+                        .permute(2, 0, 1)
+                        .unsqueeze(0)
+                        .to(device=device, dtype=torch.float32)
+                        / 255
                     )
                 # This mirrors Lerobot `select_action()` pre-processing so queues are filled correctly
                 batch_norm = policy.normalize_inputs(batch)
                 if policy.config.image_features:
-                    batch_norm = dict(batch_norm) # shallow copy then add OBS_IMAGES stack
+                    batch_norm = dict(batch_norm)  # shallow copy then add OBS_IMAGES stack
                     batch_norm[OBS_IMAGES] = torch.stack(
                         [batch_norm[k] for k in policy.config.image_features], dim=-4
                     )
@@ -225,7 +228,7 @@ def inference_worker(  # noqa: D417
                 policy._queues = populate_queues(policy._queues, batch_norm)
 
             # Now get a fresh chunk
-            chunk = policy.predict_action_chunk(batch_norm)  
+            chunk = policy.predict_action_chunk(batch_norm)
             chunk = chunk.squeeze(0).to(device="cpu").numpy()
 
         logging.debug(f"[Inference] Computed chunk with shape {tuple(chunk.shape)}")
@@ -234,13 +237,12 @@ def inference_worker(  # noqa: D417
     conn.close()
     logging.info("[Inference] Worker shutting down")
 
+
 # To be implemented later to avoid stale messages in the pipe
-def _drain_conn(conn):
+def _drain_conn(conn):  # noqa: ANN001
     """Non-blocking: remove any pending messages so we don't reuse stale chunks."""
     try:
         while conn.poll(0):
             _ = conn.recv()
     except (EOFError, OSError):
         pass
-
-    
