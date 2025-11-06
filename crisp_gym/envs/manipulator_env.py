@@ -183,7 +183,7 @@ class ManipulatorBaseEnv(gym.Env):
         }
         selected_observations = {}
         for key in observation_spaces:
-            if key in self.config.observation_to_include_to_state:
+            if key in self.config.observations_to_include_to_state:
                 selected_observations[key] = observation_spaces[key]
         return selected_observations
 
@@ -266,15 +266,15 @@ class ManipulatorBaseEnv(gym.Env):
         )
 
         # Cartesian pose
-        if ObservationKeys.CARTESIAN_OBS in self.config.observation_to_include_to_state:
+        if ObservationKeys.CARTESIAN_OBS in self.config.observations_to_include_to_state:
             obs[ObservationKeys.CARTESIAN_OBS] = cartesian_pose.astype(np.float32)
 
         # Gripper state
-        if ObservationKeys.GRIPPER_OBS in self.config.observation_to_include_to_state:
+        if ObservationKeys.GRIPPER_OBS in self.config.observations_to_include_to_state:
             obs[ObservationKeys.GRIPPER_OBS] = gripper_value.astype(np.float32)
 
         # Joint state
-        if ObservationKeys.JOINT_OBS in self.config.observation_to_include_to_state:
+        if ObservationKeys.JOINT_OBS in self.config.observations_to_include_to_state:
             obs[ObservationKeys.JOINT_OBS] = self.robot.joint_values
 
         # Camera images
@@ -552,7 +552,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         rot_dim = self.get_rotation_dimension()
         target_dim = 3 + rot_dim  # 3 for position + rotation dimension
 
-        if ObservationKeys.TARGET_OBS not in self.config.observation_to_include_to_state:
+        if ObservationKeys.TARGET_OBS not in self.config.observations_to_include_to_state:
             self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
                 {
                     **self.observation_space.spaces,
@@ -666,7 +666,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.num_joints = self.config.robot_config.num_joints()
 
         # We add the target to the observation space to allow the agent to learn the target joint positions.
-        if ObservationKeys.TARGET_OBS not in self.config.observation_to_include_to_state:
+        if ObservationKeys.TARGET_OBS not in self.config.observations_to_include_to_state:
             self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
                 {
                     **self.observation_space.spaces,
