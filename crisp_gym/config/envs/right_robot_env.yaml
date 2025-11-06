@@ -2,6 +2,13 @@ control_frequency: 30.0
 gripper_mode: "absolute_continuous"
 max_episode_steps: 1000
 
+# NOTE: These are the defaults anyway
+observation_to_include_to_state:
+  - observation.state.cartesian
+  - observation.state.gripper
+  - observation.state.joints
+  - observation.state.target
+
 cartesian_control_param_config: null  # Will use CRISP_CONFIG_PATH defaults
 joint_control_param_config: null      # Will use CRISP_CONFIG_PATH defaults
 
