@@ -93,6 +93,16 @@ class ManipulatorEnvConfig(ABC):
 
     max_episode_steps: int | None = None  # FIXME: This is not used. Remove?
 
+    # Observation configuration (camera and sensor observations are always included if configured)
+    observation_to_include_to_state: List[str] = field(
+        default_factory=lambda: [
+            ObservationKeys.CARTESIAN_OBS,
+            ObservationKeys.JOINT_OBS,
+            ObservationKeys.GRIPPER_OBS,
+            ObservationKeys.TARGET_OBS,
+        ]
+    )
+
     def __post_init__(self):
         """Post-initialization checks."""
         if self.gripper_enabled is not None:
@@ -123,9 +133,21 @@ class ManipulatorEnvConfig(ABC):
                 f"Joint control param config file not found: {self.joint_control_param_config}"
             )
 
-        if self.orientation_representation not in [OrientationRepresentation.EULER]:
-            raise NotImplementedError(
-                f"Only Euler representation is supported for now. Got {self.orientation_representation}"
+        # Validate that the orientation representation is supported
+        if isinstance(self.orientation_representation, str):
+            self.orientation_representation = OrientationRepresentation(
+                self.orientation_representation
+            )
+
+        supported_representations = [
+            OrientationRepresentation.EULER,
+            OrientationRepresentation.QUATERNION,
+            OrientationRepresentation.ANGLE_AXIS,
+        ]
+        if self.orientation_representation not in supported_representations:
+            raise ValueError(
+                f"Unsupported orientation representation: {self.orientation_representation}. "
+                f"Supported: {supported_representations}"
             )
 
         self.safety_box = {
