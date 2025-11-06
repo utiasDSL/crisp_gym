@@ -94,7 +94,7 @@ class ManipulatorEnvConfig(ABC):
     max_episode_steps: int | None = None  # FIXME: This is not used. Remove?
 
     # Observation configuration (camera and sensor observations are always included if configured)
-    observation_to_include_to_state: List[str] = field(
+    observations_to_include_to_state: List[str] = field(
         default_factory=lambda: [
             ObservationKeys.CARTESIAN_OBS,
             ObservationKeys.JOINT_OBS,
