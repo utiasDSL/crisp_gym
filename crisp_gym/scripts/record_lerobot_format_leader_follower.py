@@ -184,7 +184,8 @@ def main():
         else:
             leader = make_leader(args.leader_config, namespace=args.leader_namespace)
             leader.wait_until_ready()
-            leader.config.leader.home_config = HomeConfig.CLOSE_TO_TABLE.value
+            # Activate incase leader should go to the HomeConfig position which overrides the position specified in the config
+            # leader.config.leader.home_config = HomeConfig.CLOSE_TO_TABLE.value
             leader.config.leader.time_to_home = 2.0
             logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
@@ -259,7 +260,9 @@ def main():
             env.robot.home(blocking=False, home_config=random_home)
             if isinstance(leader, TeleopRobot):
                 leader.robot.reset_targets()
-                leader.robot.home(blocking=False, home_config=random_home)
+                # Activate incase leader should go to the same position as the follower
+                # leader.robot.home(blocking=False, home_config=random_home)
+                leader.robot.home(blocking=False)
             env.gripper.open()
 
         with recording_manager:
