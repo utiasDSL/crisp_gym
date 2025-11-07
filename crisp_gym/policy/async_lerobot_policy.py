@@ -6,7 +6,6 @@ from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from typing import Callable, Tuple
 
-import numpy as np
 import torch
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
