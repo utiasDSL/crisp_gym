@@ -596,13 +596,14 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
         # Get target pose with configured orientation representation
-        obs["observation.state.target"] = np.concatenate(
-            (
-                self.robot.target_pose.position,
-                self.rotation_to_representation(self.robot.target_pose.orientation),
-            ),
-            axis=0,
-        )
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
+            obs[ObservationKeys.TARGET_OBS] = np.concatenate(
+                (
+                    self.robot.target_pose.position,
+                    self.rotation_to_representation(self.robot.target_pose.orientation),
+                ),
+                axis=0,
+            )
         return obs
 
     @override
@@ -703,7 +704,9 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
-        obs["observation.state.target"] = self.robot.target_joint
+        # Get target pose with configured orientation representation
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
+            obs["observation.state.target"] = self.robot.target_joint
         return obs
 
     @override
