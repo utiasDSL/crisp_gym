@@ -23,6 +23,7 @@ ninja = "*"
 typing_inspect = ">=0.9.0,<0.10"
 libstdcxx-ng = ">=12.2.0"
 
+
 [target.linux.dependencies]
 libgl-devel = "*"
 
@@ -37,13 +38,14 @@ jazzy-lerobot = { features = ["jazzy", "lerobot", "dev"] }
 [feature.dev.pypi-dependencies]
 pre-commit = "*"
 ruff = "*"
+debugpy = ">=1.8.14,<2"
 
 [feature.lerobot.dependencies]
 pynput = "*"
 
 [feature.lerobot.pypi-dependencies]
-lerobot = { git = "https://github.com/huggingface/lerobot", rev = "74690e3f56a90b6ea314afbfb3b801a3d842a005", extras = ["smolvla"]}
-# lerobot = { path = "../lerobot", editable = false }
+# lerobot = { git = "https://github.com/huggingface/lerobot", rev = "74690e3f56a90b6ea314afbfb3b801a3d842a005", extras = ["smolvla"]}
+lerobot = { path = "../lerobot", editable = true }
 
 [feature.humble]
 channels = ["https://prefix.dev/robostack-humble"]
@@ -70,7 +72,7 @@ ros-jazzy-rmw-cyclonedds-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-# crisp_python = { path = "../crisp_py", editable = false }
+crisp_python = { path = "../crisp_py", editable = true }
 
 [tasks]
 configure = "bash scripts/configure.sh"

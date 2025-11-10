@@ -704,7 +704,6 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
-        # Get target pose with configured orientation representation
         if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
             obs["observation.state.target"] = self.robot.target_joint
         return obs

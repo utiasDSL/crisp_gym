@@ -190,7 +190,7 @@ def main():
 
         # %% Set up multiprocessing for policy inference
         logger.info("Setting up the policy.")
-        policy = make_policy("lerobot_policy", pretrained_path=args.path, env=env)
+        policy = make_policy("async_lerobot_policy", pretrained_path=args.path, env=env)
 
         logger.info("Homing robot before starting with recording.")
 

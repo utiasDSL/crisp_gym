@@ -6,7 +6,6 @@ from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from typing import Callable, Tuple
 
-import numpy as np
 import torch
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
@@ -17,6 +16,7 @@ from typing_extensions import override
 
 from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv
 from crisp_gym.policy.policy import Action, Observation, Policy, register_policy
+from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
 
 
 @register_policy("async_lerobot_policy")
@@ -109,13 +109,14 @@ class AsyncLerobotPolicy(Policy):
     def reset(self):
         """Reset the policy state."""
         self.parent_conn.send("reset")
-        # Make sure to drain any stale messages in the pipe
-        _drain_conn(self.parent_conn)
+
+        
 
     @override
     def shutdown(self):
         """Shutdown the policy and release resources."""
         self.parent_conn.send(None)
+        _drain_conn(self.parent_conn)
         self.inf_proc.join()
 
 
@@ -199,24 +200,9 @@ def inference_worker(  # noqa: D417
             for i in range(n_obs):
                 last = obs_seq[i]
 
-                # Implement numpy_obs_to_torch() here with env
-                # ToDo: make this a function and maybe avoid completly with new lerobot utils
-                state = np.concatenate([last["cartesian"][:6], last["gripper"]])
-                batch = {
-                    "observation.state": torch.from_numpy(state)
-                    .unsqueeze(0)
-                    .to(device=device, dtype=torch.float32),
-                    "task": "",  # TODO: Add task description if needed
-                }
-                for cam in env.cameras:
-                    img = last[f"{cam.config.camera_name}_image"]
-                    batch[f"observation.images.{cam.config.camera_name}"] = (
-                        torch.from_numpy(img)
-                        .permute(2, 0, 1)
-                        .unsqueeze(0)
-                        .to(device=device, dtype=torch.float32)
-                        / 255
-                    )
+                last["observation.state"] = concatenate_state_features(last)
+                batch=numpy_obs_to_torch(last)
+
                 # This mirrors Lerobot `select_action()` pre-processing so queues are filled correctly
                 batch_norm = policy.normalize_inputs(batch)
                 if policy.config.image_features:
