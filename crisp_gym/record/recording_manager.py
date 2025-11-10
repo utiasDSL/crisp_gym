@@ -13,7 +13,10 @@ import numpy as np
 import rclpy
 
 # TODO: make this optional, we do not want to depend on lerobot
-from lerobot.constants import HF_LEROBOT_HOME
+try:
+    from lerobot.utils.constants import HF_LEROBOT_HOME
+except ImportError:
+    from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
