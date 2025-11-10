@@ -76,8 +76,8 @@ def get_features(
             continue
 
         if feature_key.startswith("observation.state"):
-            if feature_key not in observations_to_include_to_state:
-                continue
+            # if feature_key not in observations_to_include_to_state:
+            #     continue
             # Proprioceptive state features
             feature_shape = env.observation_space[feature_key].shape
             if feature_shape is None:

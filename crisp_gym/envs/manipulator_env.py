@@ -552,7 +552,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         rot_dim = self.get_rotation_dimension()
         target_dim = 3 + rot_dim  # 3 for position + rotation dimension
 
-        if ObservationKeys.TARGET_OBS not in self.config.observations_to_include_to_state:
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
             self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
                 {
                     **self.observation_space.spaces,
@@ -667,7 +667,7 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.num_joints = self.config.robot_config.num_joints()
 
         # We add the target to the observation space to allow the agent to learn the target joint positions.
-        if ObservationKeys.TARGET_OBS not in self.config.observations_to_include_to_state:
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
             self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
                 {
                     **self.observation_space.spaces,
