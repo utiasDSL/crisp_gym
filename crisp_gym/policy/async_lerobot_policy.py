@@ -9,7 +9,11 @@ from typing import Callable, Tuple
 import torch
 from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
-from lerobot.constants import OBS_IMAGES
+# TODO: make this optional, we do not want to depend on lerobot
+try:
+    from lerobot.utils.constants import HF_LEROBOT_HOME
+except ImportError:
+    from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.policies.factory import get_policy_class
 from lerobot.policies.utils import populate_queues
 from typing_extensions import override
