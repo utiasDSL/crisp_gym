@@ -67,18 +67,11 @@ def get_features(
     state_feature_length = 0
     state_feature_names = []
 
-    # Avoid including features that are not included in the state
-    observations_to_include_to_state = set(env.config.observations_to_include_to_state or [])
-
-    # TODO: unify with crisp_gym observation keys
     for feature_key in env.observation_space.keys():
         if ignore_keys and feature_key in ignore_keys:
             continue
 
         if feature_key.startswith("observation.state"):
-            # if feature_key not in observations_to_include_to_state:
-            #     continue
-            # Proprioceptive state features
             feature_shape = env.observation_space[feature_key].shape
             if feature_shape is None:
                 raise ValueError(f"Feature shape for {feature_key} should not be None!")
