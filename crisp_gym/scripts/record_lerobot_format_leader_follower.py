@@ -131,7 +131,7 @@ def main():
 
     logger.info("Arguments:")
     for arg, value in vars(args).items():
-        logger.info(f"  {arg}: {value}")
+        logger.info(f"{arg:<30}: {value}")
 
     # Validate arguments not passed by the user
     if args.follower_namespace is None:

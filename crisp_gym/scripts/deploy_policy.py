@@ -107,7 +107,7 @@ def main():
     logger.info("-" * 40)
     logger.info("Arguments:")
     for arg, value in vars(args).items():
-        logger.info(f"  {arg}: {value}")
+        logger.info(f"  {arg:<30}: {value}")
     logger.info("-" * 40)
 
     if args.repo_id is None:
