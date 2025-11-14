@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Callable
 import numpy as np
 
 from crisp_gym.util.control_type import ControlType
+from crisp_gym.util.gripper_mode import GripperMode
 
 if TYPE_CHECKING:
     from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, ManipulatorCartesianEnv
@@ -19,6 +20,34 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+
+def _leader_gripper_to_action(
+    leader_value: float,
+    follower_value: float,
+    control_mode: GripperMode | str,
+) -> float:
+    """Convert the leader gripper value to an action for the follower gripper.
+
+    Args:
+        leader_value (float): The current value of the leader gripper.
+        follower_value (float): The current value of the follower gripper.
+        control_mode (GripperMode): The control mode of the gripper.
+
+    Returns:
+        float: The computed gripper action for the follower.
+    """
+    if isinstance(control_mode, str):
+        control_mode = GripperMode(control_mode)
+
+    if control_mode in [GripperMode.ABSOLUTE_BINARY, GripperMode.ABSOLUTE_CONTINUOUS]:
+        return leader_value
+    elif control_mode in [GripperMode.RELATIVE_BINARY, GripperMode.RELATIVE_CONTINUOUS]:
+        return leader_value - follower_value
+    elif control_mode == GripperMode.NONE:
+        return 0.0
+    else:
+        raise ValueError(f"Unsupported gripper control mode: {control_mode}")
 
 
 def make_teleop_streamer_fn(env: ManipulatorCartesianEnv, leader: TeleopStreamedPose) -> Callable:
@@ -107,25 +136,21 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
         prev_pose = pose
         prev_joint = joint
 
-        gripper = leader.gripper.value if leader.gripper is not None else 0.0
+        gripper_action = _leader_gripper_to_action(
+            leader_value=leader.gripper.value if leader.gripper is not None else 0.0,
+            follower_value=env.gripper.value if env.gripper is not None else 0.0,
+            control_mode=env.config.gripper_mode,
+        )
 
         action = None
         if env.ctrl_type is ControlType.CARTESIAN:
             # Use the environment's orientation representation for the rotation part
             rot_action = env.rotation_to_representation(action_pose.orientation)
             action = np.concatenate(
-                [
-                    list(action_pose.position) + list(rot_action),
-                    [gripper],
-                ]
+                [list(action_pose.position) + list(rot_action), [gripper_action]]
             )
         elif env.ctrl_type is ControlType.JOINT:
-            action = np.concatenate(
-                [
-                    action_joint,
-                    [gripper],
-                ]
-            )
+            action = np.concatenate([action_joint, [gripper_action]])
         else:
             raise ValueError(
                 f"Unsupported control type: {env.ctrl_type}. "
