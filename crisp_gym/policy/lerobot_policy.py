@@ -3,12 +3,14 @@
 import logging
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
-from typing import Callable, Tuple
+from pathlib import Path
+from typing import Any, Callable, Tuple
 
 import numpy as np
+import json
 import torch
 from lerobot.configs.train import TrainPipelineConfig
-from lerobot.policies.factory import get_policy_class
+from lerobot.policies.factory import LeRobotDatasetMetadata, get_policy_class
 from typing_extensions import override
 
 from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv
@@ -118,10 +120,14 @@ def inference_worker(
         logger.info(f"[Inference] Using device: {device}")
 
         logger.info(f"[Inference] Loading training config from {pretrained_path}...")
+
         train_config = TrainPipelineConfig.from_pretrained(pretrained_path)
+
+        _check_dataset_metadata(train_config, env, logger)
+
         logger.info("[Inference] Loaded training config.")
 
-        logger.info(f"[Inference] Train config: {train_config}")
+        logger.debug(f"[Inference] Train config: {train_config}")
 
         if train_config.policy is None:
             raise ValueError(
@@ -134,6 +140,9 @@ def inference_worker(
         policy = policy_cls.from_pretrained(pretrained_path)
 
         for override_key, override_value in (overrides or {}).items():
+            logger.warning(
+                f"[Inference] Overriding policy config: {override_key} = {getattr(policy.config, override_key)} -> {override_value}"
+            )
             setattr(policy.config, override_key, override_value)
 
         logger.info(
@@ -193,3 +202,71 @@ def inference_worker(
 
     conn.close()
     logger.info("[Inference] Worker shutting down")
+
+
+def _check_dataset_metadata(
+    train_config: TrainPipelineConfig,
+    env: ManipulatorBaseEnv,
+    logger: logging.Logger,
+    keys_to_skip: list[str] | None = None,
+):
+    """Check if the dataset metadata matches the environment configuration.
+
+    Args:
+        train_config (TrainPipelineConfig): The training pipeline configuration.
+        env (ManipulatorBaseEnv): The environment to compare against.
+        logger (logging.Logger): Logger for logging information.
+        keys_to_skip (list[str] | None): List of metadata keys to skip during comparison.
+    """
+    if keys_to_skip is None:
+        keys_to_skip = [
+            "crisp_gym_version",
+            "crisp_py_version",
+            "control_type",
+        ]
+
+    def _warn_if_not_equal(key: str, env_val: Any, policy_val: Any):
+        if env_val != policy_val:
+            logger.warning(
+                f"[Inference] Mismatch in metadata for key '{key}': "
+                f"env has '{env_val}', policy has '{policy_val}'."
+            )
+
+    def _warn_if_missing(key: str):
+        logger.warning(f"[Inference] Key '{key}' not found in environment metadata.")
+
+    try:
+        metadata = LeRobotDatasetMetadata(repo_id=train_config.dataset.repo_id)
+        logger.debug(f"[Inference] Loaded dataset metadata: {metadata}")
+
+        path_to_metadata = Path(metadata.root / "meta" / "crisp_meta.json")
+        if path_to_metadata.exists():
+            logger.info(
+                "[Inference] Found crisp_meta.json in dataset, comparing environment and policy configs..."
+            )
+            env_metadata = env.get_metadata()
+            with open(path_to_metadata, "r") as f:
+                dataset_metadata = json.load(f)
+            for key, value in dataset_metadata.items():
+                if key in keys_to_skip:
+                    continue
+                if isinstance(value, dict):
+                    if key not in env_metadata:
+                        _warn_if_missing(key)
+                        continue
+                    for subkey, subvalue in value.items():
+                        if subkey not in env_metadata[key]:
+                            _warn_if_missing(f"{key}.{subkey}")
+                            continue
+                        _warn_if_not_equal(
+                            f"{key}.{subkey}",
+                            env_metadata[key].get(subkey),
+                            subvalue,
+                        )
+                else:
+                    _warn_if_missing(key)
+                    _warn_if_not_equal(key, env_metadata.get(key), value)
+
+    except Exception as e:
+        logger.warning(f"[Inference] Could not load dataset metadata: {e}")
+        logger.info("[Inference] Skipping metadata comparison.")
