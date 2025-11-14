@@ -23,10 +23,22 @@ logger = logging.getLogger(__name__)
 class LerobotPolicy(Policy):
     """Abstract base class for a Policy."""
 
-    def __init__(self, pretrained_path: str, env: ManipulatorBaseEnv):
-        """Initialize the policy."""
+    def __init__(
+        self,
+        pretrained_path: str,
+        env: ManipulatorBaseEnv,
+        overrides: dict | None = None,
+    ):
+        """Initialize the policy.
+
+        Args:
+            pretrained_path (str): Path to the pretrained policy model.
+            env (ManipulatorBaseEnv): The environment in which the policy will be applied.
+            overrides (dict | None): Optional overrides for the policy configuration.
+        """
         self.parent_conn, self.child_conn = Pipe()
         self.env = env
+        self.overrides = overrides if overrides is not None else {}
 
         self.inf_proc = Process(
             target=inference_worker,
@@ -34,6 +46,7 @@ class LerobotPolicy(Policy):
                 "conn": self.child_conn,
                 "pretrained_path": pretrained_path,
                 "env": env,
+                "overrides": self.overrides,
             },
             daemon=True,
         )
@@ -86,6 +99,7 @@ def inference_worker(
     conn: Connection,
     pretrained_path: str,
     env: ManipulatorBaseEnv,
+    overrides: dict | None = None,
 ):  # noqa: ANN001
     """Policy inference process: loads policy on GPU, receives observations via conn, returns actions, and exits on None.
 
@@ -118,8 +132,9 @@ def inference_worker(
         logger.info("[Inference] Loading policy...")
         policy_cls = get_policy_class(train_config.policy.type)
         policy = policy_cls.from_pretrained(pretrained_path)
-        policy.config.do_multi_step_sampling = False
-        policy.config.n_inference_steps = 1
+
+        for override_key, override_value in (overrides or {}).items():
+            setattr(policy.config, override_key, override_value)
 
         logger.info(
             f"[Inference] Loaded {policy.name} policy with {pretrained_path} on device {device}."

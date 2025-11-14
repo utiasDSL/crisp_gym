@@ -9,6 +9,7 @@ import crisp_gym  # noqa: F401
 from crisp_gym.envs.manipulator_env import make_env
 from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.policy import make_policy
+from crisp_gym.policy.policy import list_policy_configs
 from crisp_gym.record.evaluate import Evaluator
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
@@ -88,6 +89,12 @@ def main():
         help="Configuration name for the follower robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
+        "--policy-config",
+        type=str,
+        default=None,
+        help="Path to a custom policy configuration file (YAML). If not provided, the default configuration for the selected policy will be used.",
+    )
+    parser.add_argument(
         "--env-namespace",
         type=str,
         default=None,
@@ -154,6 +161,14 @@ def main():
         )
         logger.info(f"Using follower configuration: {args.env_config}")
 
+    if args.policy_config is None:
+        policy_configs = list_policy_configs()
+        args.policy_config = prompt.prompt(
+            "Please select the policy configuration to use.",
+            options=policy_configs,
+            default=policy_configs[0],
+        )
+
     if args.evaluate:
         logger.info("Evaluation mode enabled. Will evaluate the performance after each episode.")
         datetime_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -190,7 +205,11 @@ def main():
 
         # %% Set up multiprocessing for policy inference
         logger.info("Setting up the policy.")
-        policy = make_policy("async_lerobot_policy", pretrained_path=args.path, env=env)
+        policy = make_policy(
+            name_or_config_name=args.policy_config,
+            pretrained_path=args.path,
+            env=env,
+        )
 
         logger.info("Homing robot before starting with recording.")
 

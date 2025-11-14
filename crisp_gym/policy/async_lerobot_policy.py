@@ -11,7 +11,11 @@ from lerobot.configs.policies import PreTrainedConfig
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import get_policy_class
 from lerobot.policies.utils import populate_queues
-from lerobot.utils.constants import OBS_IMAGES
+
+try:
+    from lerobot.utils.constants import OBS_IMAGES
+except ImportError:
+    from lerobot.constants import OBS_IMAGES
 from typing_extensions import override
 
 from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv
