@@ -9,7 +9,6 @@ import rclpy
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import HomeConfig
-from crisp_gym.config.path import CRISP_CONFIG_PATH
 from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv, make_env
 from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import make_teleop_fn, make_teleop_streamer_fn
@@ -174,8 +173,6 @@ def main():
             control_type=ctrl_type,
             namespace=args.follower_namespace,
         )
-        env.config.robot_config.home_config = HomeConfig.CLOSE_TO_TABLE.value
-        env.config.robot_config.time_to_home = 2.0
 
         leader: TeleopRobot | TeleopStreamedPose | None = None
         if args.use_streamed_teleop:
@@ -184,9 +181,6 @@ def main():
         else:
             leader = make_leader(args.leader_config, namespace=args.leader_namespace)
             leader.wait_until_ready()
-            # Activate incase leader should go to the HomeConfig position which overrides the position specified in the config
-            # leader.config.leader.home_config = HomeConfig.CLOSE_TO_TABLE.value
-            leader.config.leader.time_to_home = 2.0
             logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
         keys_to_ignore = []
@@ -237,21 +231,23 @@ def main():
             """Hook function to be called when starting a new episode."""
             env.robot.reset_targets()
             env.reset()
-            leader.gripper.disable_torque()
 
             # TODO: @danielsanjosepro: ask user for which controller to use.
             if isinstance(leader, TeleopRobot):
-                try:
-                    leader.robot.controller_switcher_client.switch_controller(
-                        "torque_feedback_controller"
-                    )
-                except Exception:
-                    leader.robot.cartesian_controller_parameters_client.load_param_config(
-                        CRISP_CONFIG_PATH / "control" / "gravity_compensation_on_plane.yaml"
-                    )
-                    leader.robot.controller_switcher_client.switch_controller(
-                        "cartesian_impedance_controller"
-                    )
+                # try:
+                #     leader.robot.controller_switcher_client.switch_controller(
+                #         "torque_feedback_controller"
+                #     )
+                # except Exception:
+                leader.robot.reset_targets()
+                leader.robot.cartesian_controller_parameters_client.load_param_config(
+                    leader.config.gravity_compensation_controller
+                )
+                leader.robot.controller_switcher_client.switch_controller(
+                    "cartesian_impedance_controller"
+                )
+                if leader.gripper is not None:
+                    leader.gripper.disable_torque()
 
         def on_end():
             """Hook function to be called when stopping the recording."""

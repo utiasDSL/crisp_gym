@@ -1,5 +1,6 @@
 """Interface for a Policy interacting in CRISP."""
 
+import json
 import logging
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
@@ -7,7 +8,6 @@ from pathlib import Path
 from typing import Any, Callable, Tuple
 
 import numpy as np
-import json
 import torch
 from lerobot.configs.train import TrainPipelineConfig
 from lerobot.policies.factory import LeRobotDatasetMetadata, get_policy_class
@@ -108,8 +108,8 @@ def inference_worker(
     Args:
         conn (Connection): The connection to the parent process for sending and receiving data.
         pretrained_path (str): Path to the pretrained policy model.
-        dataset_metadata (LeRobotDatasetMetadata): Metadata for the dataset, if needed.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
+        overrides (dict | None): Optional overrides for the policy configuration.
     """
     setup_logging()
     logger = logging.getLogger(__name__)

@@ -3,14 +3,13 @@
 import atexit
 import logging
 import queue
-from logging.handlers import QueueHandler, QueueListener
+from logging.handlers import QueueListener
 
 from rich.logging import RichHandler
 
 
 def setup_logging(level=logging.INFO):  # noqa: ANN001
     """Recommended logging setup for the project."""
-
     console_formatter = logging.Formatter(fmt="%(message)s", datefmt="[%X]")
     console_handler = RichHandler(rich_tracebacks=True)
     console_handler.setFormatter(console_formatter)
@@ -22,7 +21,7 @@ def setup_logging(level=logging.INFO):  # noqa: ANN001
     file_handler.setFormatter(file_formatter)
 
     log_queue = queue.Queue()
-    queue_handler = QueueHandler(log_queue)
+    # queue_handler = QueueHandler(log_queue)
 
     logger = logging.getLogger()
     logger.setLevel(level)
