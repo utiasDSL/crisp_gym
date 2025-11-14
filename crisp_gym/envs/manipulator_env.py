@@ -360,6 +360,9 @@ class ManipulatorBaseEnv(gym.Env):
         if self.gripper is not None:
             self.gripper.enable_torque()
 
+        for sensor in self.sensors:
+            sensor.reset()
+
         return self._get_obs(), {}
 
     @override
