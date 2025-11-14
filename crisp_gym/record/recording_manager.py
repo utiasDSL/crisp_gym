@@ -223,9 +223,6 @@ class RecordingManager(ABC):
                     logger.info("Saving current episode to dataset.")
 
                     dataset.save_episode()
-                    logger.info(
-                        f"Episode {self.episode_count} saved to dataset.",
-                    )
 
                 elif mtype == "DELETE_EPISODE":
                     if self.config.use_sound:
