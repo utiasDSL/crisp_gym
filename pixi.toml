@@ -39,6 +39,7 @@ jazzy-lerobot = { features = ["jazzy", "lerobot", "dev"] }
 pre-commit = "*"
 ruff = "*"
 debugpy = ">=1.8.14,<2"
+pudb = ">=2025.1.3, <2026"
 
 [feature.lerobot.dependencies]
 pynput = "*"
