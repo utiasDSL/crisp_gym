@@ -83,7 +83,7 @@ def main():
         "--follower-config",
         type=str,
         default=None,
-        help="Configuration name for the leader robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
+        help="Configuration name for the follower robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
         "--follower-namespace",
