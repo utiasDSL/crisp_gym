@@ -43,10 +43,15 @@ pudb = ">=2025.1.3, <2026"
 
 [feature.lerobot.dependencies]
 pynput = "*"
+rerun-sdk = "=0.22.1"
 
 [feature.lerobot.pypi-dependencies]
+# === Working version ===
+lerobot = { git = "https://github.com/huggingface/lerobot", rev = "dacd1d7f5c719c3e56d7b7154a751bef6d5bd23c", extras = ["smolvla"]}
+# === Newer version ===
 # lerobot = { git = "https://github.com/huggingface/lerobot", rev = "74690e3f56a90b6ea314afbfb3b801a3d842a005", extras = ["smolvla"]}
-lerobot = { path = "../lerobot", editable = true }
+# === Local version ===
+# lerobot = { path = "../lerobot/", editable = true }
 
 [feature.humble]
 channels = ["https://prefix.dev/robostack-humble"]
@@ -70,10 +75,11 @@ ros-jazzy-ros2-controllers = "*"
 colcon-common-extensions = "*"
 rosdep = "*"
 ros-jazzy-rmw-cyclonedds-cpp = "*"
+ros-jazzy-rmw-zenoh-cpp = "*"
 
 [pypi-dependencies]
 crisp_gym = { path = ".", editable = true }
-crisp_python = { path = "../crisp_py", editable = true }
+# crisp_python = { path = "../crisp_py", editable = true }
 
 [tasks]
 configure = "bash scripts/configure.sh"
