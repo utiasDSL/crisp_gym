@@ -89,7 +89,7 @@ def list_policy_configs() -> list[str]:
     yaml_configs = [file.stem for file in other if file.suffix == ".yaml"]
     if not yaml_configs:
         raise ValueError(
-            "No policy configurations found inside 'policy' folder."
+            "No policy configurations found inside 'policy' folder. "
             "Run 'crisp-check-config' to verify the available configs.",
         )
     return yaml_configs
