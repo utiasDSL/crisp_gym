@@ -196,7 +196,7 @@ def inference_worker(  # noqa: D417
         # We are recieving a list of dictonaries with the last observations
         obs_seq = msg["obs_seq"]
 
-        # Make the policy predict an action chunk for the current obeservation.
+        # Make the policy predict an action chunk for the current observation.
         # Therefore we follow the implementation on the Lerobot side for select_action() which calls predict_action_chunk()
         with torch.inference_mode():
             for i in range(n_obs):
