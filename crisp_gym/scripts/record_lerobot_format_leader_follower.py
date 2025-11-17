@@ -231,13 +231,9 @@ def main():
             env.robot.reset_targets()
             env.reset()
 
-            # TODO: @danielsanjosepro: ask user for which controller to use.
             if isinstance(leader, TeleopRobot):
-                # try:
-                #     leader.robot.controller_switcher_client.switch_controller(
-                #         "torque_feedback_controller"
-                #     )
-                # except Exception:
+                # TODO: @danielsanjosepro: allow user to change controllers based on config
+
                 leader.robot.reset_targets()
                 leader.robot.cartesian_controller_parameters_client.load_param_config(
                     leader.config.gravity_compensation_controller
@@ -245,6 +241,7 @@ def main():
                 leader.robot.controller_switcher_client.switch_controller(
                     "cartesian_impedance_controller"
                 )
+
                 if leader.gripper is not None:
                     leader.gripper.disable_torque()
 
