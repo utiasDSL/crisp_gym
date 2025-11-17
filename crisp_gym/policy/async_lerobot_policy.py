@@ -137,7 +137,7 @@ def inference_worker(  # noqa: D417
         pretrained_path (str): Path to the pretrained policy model.
         env (ManipulatorBaseEnv): The environment in which the policy will be applied.
         steps (int): How many actions are executed from the prediction
-        inpainting (bool): Wether to use inpainting in the prediction of a new chunk or not
+        inpainting (bool): Whether to use inpainting in the prediction of a new chunk or not
         replan_time (int): After how many steps to start predicting a new action chunk
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
