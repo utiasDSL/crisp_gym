@@ -59,7 +59,7 @@ def make_policy(name_or_config_name, *args, **kwargs) -> Policy:  # noqa: ANN001
         "policy"
         + "/"
         + name_or_config_name
-        + (".yaml" if not name_or_config_name.endswith(".yaml") else name_or_config_name)
+        + ("" if name_or_config_name.endswith(".yaml") else ".yaml")
     )
     config = {}
     if file_path is not None:
