@@ -23,8 +23,12 @@ logger = logging.getLogger(__name__)
 
 @register_policy("lerobot_policy")
 class LerobotPolicy(Policy):
-    """Abstract base class for a Policy."""
+    """A policy implementation that wraps a LeRobot policy for use in CRISP environments.
 
+    This class runs LeRobot policy inference in a separate process and communicates with the
+    environment to generate actions based on observations. It is intended for direct use in
+    CRISP-based manipulation environments.
+    """
     def __init__(
         self,
         pretrained_path: str,
