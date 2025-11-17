@@ -191,9 +191,7 @@ def inference_worker(
 
             with torch.inference_mode():
                 obs = numpy_obs_to_torch(obs_raw)
-                # # TODO: prepocess
                 action = policy.select_action(obs)
-                # # TODO: postprocess
 
             logger.debug(f"[Inference] Computed action: {action}")
             conn.send(action)
