@@ -184,7 +184,6 @@ def main():
             logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
         keys_to_ignore = []
-        # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
         features = get_features(env=env, ignore_keys=keys_to_ignore)
         logger.debug(f"Using the features: {features}")
 
