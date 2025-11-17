@@ -4,7 +4,7 @@ To use an environment, you can use the `make_env` function to create an instance
 
 Example:
 ```python
-from crisp_gym import make_env
+from crisp_gym.envs import make_env
 
 env = make_env(
     env_type="manipulator_cartesian",
@@ -34,12 +34,13 @@ import rclpy
 from crisp_py.camera import Camera
 from crisp_py.gripper import Gripper
 from crisp_py.robot import Pose, Robot
-from crisp_py.sensors.sensor import make_sensor
+from crisp_py.sensors.sensor import Sensor
+from crisp_py.utils.geometry import OrientationRepresentation
 from numpy.typing import NDArray
 from scipy.spatial.transform import Rotation
 from typing_extensions import override
 
-from crisp_gym.manipulator_env_config import (
+from crisp_gym.envs.manipulator_env_config import (
     ManipulatorEnvConfig,
     ObservationKeys,
     make_env_config,
@@ -90,7 +91,7 @@ class ManipulatorBaseEnv(gym.Env):
             for camera_config in self.config.camera_configs
         ]
         self.sensors: List = [
-            make_sensor(
+            Sensor(
                 namespace=namespace,
                 sensor_config=sensor_config,
             )
@@ -111,6 +112,10 @@ class ManipulatorBaseEnv(gym.Env):
                 "All cameras must have a resolution defined in the configuration file."
             )
 
+        # Calculate rotation dimension based on orientation representation
+        rot_dim = self.get_rotation_dimension()
+        cartesian_dim = 3 + rot_dim  # 3 for position + rotation dimension
+
         self.observation_space = gym.spaces.Dict(
             {
                 **{
@@ -122,34 +127,7 @@ class ManipulatorBaseEnv(gym.Env):
                     for camera in self.cameras
                     if camera.config.resolution is not None
                 },
-                # Combined state: cartesian pose (6D)
-                ObservationKeys.CARTESIAN_OBS: gym.spaces.Box(
-                    low=np.concatenate(
-                        [
-                            -np.ones((6,), dtype=np.float32),  # cartesian pose
-                        ]
-                    ),
-                    high=np.concatenate(
-                        [
-                            np.ones((6,), dtype=np.float32),  # cartesian pose
-                        ]
-                    ),
-                    dtype=np.float32,
-                ),
-                # Gripper state
-                ObservationKeys.GRIPPER_OBS: gym.spaces.Box(
-                    low=np.array([0.0], dtype=np.float32),
-                    high=np.array([1.0], dtype=np.float32),
-                    dtype=np.float32,
-                ),
-                # Joint state
-                ObservationKeys.JOINT_OBS: gym.spaces.Box(
-                    low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
-                    * -np.pi,
-                    high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32)
-                    * np.pi,
-                    dtype=np.float32,
-                ),
+                **self.get_state_observation_spaces(cartesian_dim),
                 # Task description
                 "task": gym.spaces.Text(max_length=256),
                 # Sensor data
@@ -165,6 +143,49 @@ class ManipulatorBaseEnv(gym.Env):
             }
         )
         self._uninitialized = True
+
+    def get_state_observation_spaces(self, cartesian_dim: int) -> dict:
+        """Get the state observation spaces.
+
+        Args:
+            cartesian_dim (int): Dimension of the cartesian observation (position + rotation).
+
+        Returns:
+            dict: A dictionary containing the state observation spaces.
+        """
+        observation_spaces = {
+            # Cartesian pose: position (3D) + rotation (rot_dim)
+            ObservationKeys.CARTESIAN_OBS: gym.spaces.Box(
+                low=np.concatenate(
+                    [
+                        -np.ones((cartesian_dim,), dtype=np.float32),
+                    ]
+                ),
+                high=np.concatenate(
+                    [
+                        np.ones((cartesian_dim,), dtype=np.float32),
+                    ]
+                ),
+                dtype=np.float32,
+            ),
+            # Gripper state
+            ObservationKeys.GRIPPER_OBS: gym.spaces.Box(
+                low=np.array([0.0], dtype=np.float32),
+                high=np.array([1.0], dtype=np.float32),
+                dtype=np.float32,
+            ),
+            # Joint state
+            ObservationKeys.JOINT_OBS: gym.spaces.Box(
+                low=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32) * -np.pi,
+                high=np.ones((self.config.robot_config.num_joints(),), dtype=np.float32) * np.pi,
+                dtype=np.float32,
+            ),
+        }
+        selected_observations = {}
+        for key in observation_spaces:
+            if key in self.config.observations_to_include_to_state:
+                selected_observations[key] = observation_spaces[key]
+        return selected_observations
 
     def initialize(self, force: bool = False):
         """Initialize the environment.
@@ -230,11 +251,11 @@ class ManipulatorBaseEnv(gym.Env):
         # TODO: Task description
         obs["task"] = ""
 
-        # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
+        # Get cartesian pose with configured orientation representation
         cartesian_pose = np.concatenate(
             (
                 self.robot.end_effector_pose.position,
-                self.robot.end_effector_pose.orientation.as_euler("xyz"),
+                self.rotation_to_representation(self.robot.end_effector_pose.orientation),
             ),
             axis=0,
         )
@@ -245,13 +266,16 @@ class ManipulatorBaseEnv(gym.Env):
         )
 
         # Cartesian pose
-        obs[ObservationKeys.CARTESIAN_OBS] = cartesian_pose.astype(np.float32)
+        if ObservationKeys.CARTESIAN_OBS in self.config.observations_to_include_to_state:
+            obs[ObservationKeys.CARTESIAN_OBS] = cartesian_pose.astype(np.float32)
 
         # Gripper state
-        obs[ObservationKeys.GRIPPER_OBS] = gripper_value.astype(np.float32)
+        if ObservationKeys.GRIPPER_OBS in self.config.observations_to_include_to_state:
+            obs[ObservationKeys.GRIPPER_OBS] = gripper_value.astype(np.float32)
 
         # Joint state
-        obs[ObservationKeys.JOINT_OBS] = self.robot.joint_values
+        if ObservationKeys.JOINT_OBS in self.config.observations_to_include_to_state:
+            obs[ObservationKeys.JOINT_OBS] = self.robot.joint_values
 
         # Camera images
         for camera in self.cameras:
@@ -332,6 +356,12 @@ class ManipulatorBaseEnv(gym.Env):
         self.robot.reset_targets()
         self.robot.wait_until_ready()
         self.switch_to_default_controller()
+
+        if self.gripper is not None:
+            self.gripper.enable_torque()
+
+        for sensor in self.sensors:
+            sensor.reset()
 
         return self._get_obs(), {}
 
@@ -424,6 +454,82 @@ class ManipulatorBaseEnv(gym.Env):
         self.robot.wait_until_ready()
         self.switch_to_default_controller()
 
+    def get_rotation_dimension(self) -> int:
+        """Get the dimension of the rotation representation.
+
+        Returns:
+            int: The dimension of the rotation (3 for Euler/AngleAxis, 4 for Quaternion).
+        """
+        if self.config.orientation_representation == OrientationRepresentation.EULER:
+            return 3
+        elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
+            return 4
+        elif self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS:
+            return 3
+        else:
+            raise ValueError(
+                f"Unsupported orientation representation: {self.config.orientation_representation}"
+            )
+
+    def rotation_to_representation(self, rotation: Rotation) -> np.ndarray:
+        """Convert a Rotation object to the configured orientation representation.
+
+        Args:
+            rotation (Rotation): A scipy Rotation object to convert.
+
+        Returns:
+            np.ndarray: The rotation in the configured representation.
+        """
+        if self.config.orientation_representation == OrientationRepresentation.EULER:
+            return rotation.as_euler("xyz")
+        elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
+            return rotation.as_quat()
+        elif self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS:
+            return rotation.as_rotvec()
+        else:
+            raise ValueError(
+                f"Unsupported orientation representation: {self.config.orientation_representation}"
+            )
+
+    def action_to_rotation(self, rot_action: np.ndarray) -> Rotation:
+        """Convert the rotation part of the action to a Rotation object.
+
+        Args:
+            rot_action (np.ndarray): Rotation action for the environment. Dimension depends on the chosen orientation representation.
+
+        Returns:
+            Rotation: A scipy Rotation object representing the rotation.
+        """
+        if self.config.orientation_representation == OrientationRepresentation.EULER:
+            return Rotation.from_euler("xyz", rot_action)
+        elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
+            return Rotation.from_quat(rot_action)
+        elif self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS:
+            return Rotation.from_rotvec(rot_action)
+        else:
+            raise ValueError(
+                f"Unsupported orientation representation: {self.config.orientation_representation}"
+            )
+
+    def clip_position_for_safety(self, position: np.ndarray) -> np.ndarray:
+        """Clip the position to ensure safety.
+
+        Args:
+            position (np.ndarray): The position to be clipped.
+
+        Returns:
+            np.ndarray: The clipped position.
+        """
+        if self.config.safety_box is None:
+            return position
+
+        clipped_position = np.clip(
+            position,
+            self.config.safety_box["lower"],
+            self.config.safety_box["upper"],
+        )
+        return clipped_position
+
 
 class ManipulatorCartesianEnv(ManipulatorBaseEnv):
     """Manipulator Cartesian Environment.
@@ -443,23 +549,33 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         self.ctrl_type = ControlType.CARTESIAN
 
         # TODO: Make this configurable
-        self._min_z_height = 0.0
+        self._min_z_height = 0.0425
 
-        self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
-            {
-                **self.observation_space.spaces,
-                ObservationKeys.TARGET_OBS: gym.spaces.Box(
-                    low=np.ones((6,), dtype=np.float32) * -np.pi,
-                    high=np.ones((6,), dtype=np.float32) * np.pi,
-                    dtype=np.float32,
-                ),
-            },
-        )
+        # Get rotation dimension for this environment
+        rot_dim = self.get_rotation_dimension()
+        target_dim = 3 + rot_dim  # 3 for position + rotation dimension
+
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
+            self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+                {
+                    **self.observation_space.spaces,
+                    ObservationKeys.TARGET_OBS: gym.spaces.Box(
+                        low=np.ones((target_dim,), dtype=np.float32) * -np.pi,
+                        high=np.ones((target_dim,), dtype=np.float32) * np.pi,
+                        dtype=np.float32,
+                    ),
+                },
+            )
+
+        # Create action space with appropriate rotation dimension
+        rot_low = -np.ones((rot_dim,), dtype=np.float32) * np.pi
+        rot_high = np.ones((rot_dim,), dtype=np.float32) * np.pi
+
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
                 [
                     -np.ones((3,), dtype=np.float32),  # Translation limits [-1, -1, -1]
-                    -np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [-pi, -pi, -pi]
+                    rot_low,  # Rotation limits (dimension-dependent)
                     np.array(
                         [min_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
                     ),
@@ -469,7 +585,7 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             high=np.concatenate(
                 [
                     np.ones((3,), dtype=np.float32),  # Translation limits [1, 1, 1]
-                    np.ones((3,), dtype=np.float32) * np.pi,  # Rotation limits [pi, pi, pi]
+                    rot_high,  # Rotation limits (dimension-dependent)
                     np.array(
                         [max_action_for_gripper_mode(self.config.gripper_mode)], dtype=np.float32
                     ),
@@ -482,14 +598,15 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
-        # TODO: consider using a different representation for rotation that is not Euler angles -> axis-angle or quaternion representation
-        obs["observation.state.target"] = np.concatenate(
-            (
-                self.robot.target_pose.position,
-                self.robot.target_pose.orientation.as_euler("xyz"),
-            ),
-            axis=0,
-        )
+        # Get target pose with configured orientation representation
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
+            obs[ObservationKeys.TARGET_OBS] = np.concatenate(
+                (
+                    self.robot.target_pose.position,
+                    self.rotation_to_representation(self.robot.target_pose.orientation),
+                ),
+                axis=0,
+            )
         return obs
 
     @override
@@ -497,7 +614,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         """Step the environment with a Cartesian action.
 
         Args:
-            action (np.ndarray): Cartesian delta action [dx, dy, dz, roll, pitch, yaw, gripper_action].
+            action (np.ndarray): Cartesian delta action [dx, dy, dz, *d_rot_action, gripper_action],
+                                where d_rot_action dimension depends on the chosen orientation representation.
             block (bool): If True, block to maintain the control rate.
 
         Returns:
@@ -506,12 +624,12 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         assert action.shape == self.action_space.shape, (
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
-        # assert self.action_space.contains(action), f"Action {action} is not in the action space {self.action_space}"
+        translation = action[:3]
+        rotation = self.action_to_rotation(action[3:-1])
 
-        translation, rotation = action[:3], Rotation.from_euler("xyz", action[3:6])
-
-        target_position = self.robot.target_pose.position + translation
-        target_position[2] = max(target_position[2], self._min_z_height)
+        target_position = self.clip_position_for_safety(
+            self.robot.target_pose.position + translation
+        )
         target_orientation = rotation * self.robot.target_pose.orientation
 
         target_pose = Pose(position=target_position, orientation=target_orientation)
@@ -521,6 +639,8 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[-1])
 
         if block:
+            # FIXME: This control rate sleep is never used and if used by the user
+            # unexpected behavior occurs.
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)
@@ -550,16 +670,17 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
         self.num_joints = self.config.robot_config.num_joints()
 
         # We add the target to the observation space to allow the agent to learn the target joint positions.
-        self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
-            {
-                **self.observation_space.spaces,
-                ObservationKeys.TARGET_OBS: gym.spaces.Box(
-                    low=np.ones((self.num_joints,), dtype=np.float32) * -np.pi,
-                    high=np.ones((self.num_joints,), dtype=np.float32) * np.pi,
-                    dtype=np.float32,
-                ),
-            },
-        )
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
+            self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+                {
+                    **self.observation_space.spaces,
+                    ObservationKeys.TARGET_OBS: gym.spaces.Box(
+                        low=np.ones((self.num_joints,), dtype=np.float32) * -np.pi,
+                        high=np.ones((self.num_joints,), dtype=np.float32) * np.pi,
+                        dtype=np.float32,
+                    ),
+                },
+            )
 
         self.action_space = gym.spaces.Box(
             low=np.concatenate(
@@ -586,7 +707,8 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
-        obs["observation.state.target"] = self.robot.target_joint
+        if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
+            obs["observation.state.target"] = self.robot.target_joint
         return obs
 
     @override
@@ -617,6 +739,8 @@ class ManipulatorJointEnv(ManipulatorBaseEnv):
             self._set_gripper_action(action[-1])
 
         if block:
+            # FIXME: This control rate sleep is never used and if used by the user
+            # unexpected behavior occurs.
             self.control_rate.sleep()
 
         _, reward, terminated, truncated, info = super().step(action)
