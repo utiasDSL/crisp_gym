@@ -1,6 +1,6 @@
 [project]
 name = "crisp-gym"
-version = "3.2.3"
+version = "4.0.0"
 description = "Simple gymnasium environments for crisp_py"
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,5 +1,33 @@
 # Changelog
 
+## [4.0.0](https://github.com/utiasDSL/crisp_gym/compare/v3.2.3...v4.0.0) (2025-11-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* Move environments to its own directory
+
+### Features
+
+* add orientation representation + observation to include to state ([08830e0](https://github.com/utiasDSL/crisp_gym/commit/08830e0cf32925c12e0cf0beb6bf49d7ab57731e))
+* add reset for sensors ([0d15cf6](https://github.com/utiasDSL/crisp_gym/commit/0d15cf6acf90de6c2c4f67e029853578cb35eb0b))
+* Include metadata in recording + add an option to randomize the home pose ([2becf29](https://github.com/utiasDSL/crisp_gym/commit/2becf29abb49df145debfa919cb3ac241f09a26b))
+* make policy configurable with config file ([07ea87a](https://github.com/utiasDSL/crisp_gym/commit/07ea87a3b34f5f19b6e3da107f806d7da00b64e5))
+* Make repo id mandatory ([2456e6c](https://github.com/utiasDSL/crisp_gym/commit/2456e6c53d08a23b4fd37bb73a6458f9c5b98144))
+* Move environments to its own directory ([7b92cfd](https://github.com/utiasDSL/crisp_gym/commit/7b92cfd91a7ad3f86dea8e7e2579b243d17c5516))
+* new configs ([1362f20](https://github.com/utiasDSL/crisp_gym/commit/1362f203b690265f91ab5a7cb30755559bd2bf5d))
+* Policy interface to allow different inference types ([e575c4c](https://github.com/utiasDSL/crisp_gym/commit/e575c4c88f224c8f10f4126e8ca63c5e117cbe30))
+* Push to hub is not default in deployment ([df35143](https://github.com/utiasDSL/crisp_gym/commit/df35143a03284561cf523034d00f54bef7ffcbf1))
+* warn user of overrides in the policy and environment ([1dd0eb3](https://github.com/utiasDSL/crisp_gym/commit/1dd0eb3b1a53c290b3f10b2bd6daa1867f261f60))
+
+
+### Bug Fixes
+
+* a few small details ([32a7879](https://github.com/utiasDSL/crisp_gym/commit/32a7879355671320a482a20b3caad1c69680d674))
+* evaluator was missing start_timer ([1dad235](https://github.com/utiasDSL/crisp_gym/commit/1dad2353478edf3c51a4f9c92c8a39bbebe472c3))
+* pixi.toml lerobot install and add scripts to pyproject.toml ([e420997](https://github.com/utiasDSL/crisp_gym/commit/e4209970c5be9de2a0908cfc71310d999d26f623))
+* removed unused import ([5a996b3](https://github.com/utiasDSL/crisp_gym/commit/5a996b37bffd3a3bff76178bda76cabcffaeebe2))
+
 ## [3.2.3](https://github.com/utiasDSL/crisp_gym/compare/v3.2.2...v3.2.3) (2025-10-15)
 
 
