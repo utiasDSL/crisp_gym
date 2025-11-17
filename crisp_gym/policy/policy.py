@@ -72,7 +72,7 @@ def make_policy(name_or_config_name, *args, **kwargs) -> Policy:  # noqa: ANN001
     policy_cls = policy_registry.get(name)
     if policy_cls is None:
         raise ValueError(
-            f"Policy '{name}' is not registered.Available policies: {list(policy_registry.keys())}",
+            f"Policy '{name}' is not registered. Available policies: {list(policy_registry.keys())}",
             f"{'Make sure the policy is registered and the config file exists: ' + str(file_path) if file_path is not None else ''}",
         )
 
