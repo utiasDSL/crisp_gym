@@ -83,6 +83,8 @@ class ManipulatorEnvConfig(ABC):
     # Orientation representation
     orientation_representation: OrientationRepresentation = OrientationRepresentation.EULER
 
+    use_relative_actions: bool = True
+
     # Safety limits
     min_x: None | float = None
     min_y: None | float = None
