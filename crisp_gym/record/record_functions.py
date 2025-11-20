@@ -131,8 +131,14 @@ def make_teleop_fn(env: ManipulatorBaseEnv, leader: TeleopRobot) -> Callable:
 
         pose = leader.robot.end_effector_pose
         joint = leader.robot.joint_values
-        action_pose = pose - prev_pose
-        action_joint = joint - prev_joint
+
+        if env.config.use_relative_actions:
+            action_pose = pose - prev_pose
+            action_joint = joint - prev_joint
+        else:
+            action_pose = pose
+            action_joint = joint
+
         prev_pose = pose
         prev_joint = joint
 
