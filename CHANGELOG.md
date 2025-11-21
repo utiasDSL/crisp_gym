@@ -1,5 +1,19 @@
 # Changelog
 
+## [4.1.0](https://github.com/utiasDSL/crisp_gym/compare/v4.0.0...v4.1.0) (2025-11-21)
+
+
+### Features
+
+* add absolute actions environment ([5185584](https://github.com/utiasDSL/crisp_gym/commit/51855848ffe589a2407a6cda52f152694bff42d7))
+* Add absolute actions to cartesian environment ([42eb715](https://github.com/utiasDSL/crisp_gym/commit/42eb715f9c4eadc833926180b921b8279f713885))
+* Allow recordings in absolute pose ([b8cc64e](https://github.com/utiasDSL/crisp_gym/commit/b8cc64eea1de06508247a5922f0b45dbe287c920))
+
+
+### Bug Fixes
+
+* wrong warnings on gym version ([c9f21d8](https://github.com/utiasDSL/crisp_gym/commit/c9f21d82d83241efb847de76ebac7b0fd32b3b41))
+
 ## [4.0.0](https://github.com/utiasDSL/crisp_gym/compare/v3.2.3...v4.0.0) (2025-11-17)
 
 
