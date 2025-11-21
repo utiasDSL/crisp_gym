@@ -2,6 +2,7 @@
 
 import json
 import logging
+from importlib.metadata import version
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from pathlib import Path
@@ -230,11 +231,7 @@ def _check_dataset_metadata(
         keys_to_skip (list[str] | None): List of metadata keys to skip during comparison.
     """
     if keys_to_skip is None:
-        keys_to_skip = [
-            "crisp_gym_version",
-            "crisp_py_version",
-            "control_type",
-        ]
+        keys_to_skip = []
 
     def _warn_if_not_equal(key: str, env_val: Any, policy_val: Any):
         if env_val != policy_val:
@@ -275,7 +272,8 @@ def _check_dataset_metadata(
                             subvalue,
                         )
                 else:
-                    _warn_if_missing(key)
+                    if key not in env_metadata:
+                        _warn_if_missing(key)
                     _warn_if_not_equal(key, env_metadata.get(key), value)
 
     except Exception as e:
