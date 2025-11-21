@@ -2,7 +2,6 @@
 
 import json
 import logging
-from importlib.metadata import version
 from multiprocessing import Pipe, Process
 from multiprocessing.connection import Connection
 from pathlib import Path
