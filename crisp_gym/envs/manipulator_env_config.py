@@ -184,6 +184,8 @@ class ManipulatorEnvConfig(ABC):
             "gripper_threshold": self.gripper_threshold,
             "cartesian_control_param_config": str(self.cartesian_control_param_config),
             "joint_control_param_config": str(self.joint_control_param_config),
+            "orientation_representation": str(self.orientation_representation),
+            "use_relative_actions": self.use_relative_actions,
         }
 
     @classmethod
