@@ -83,6 +83,8 @@ class ManipulatorEnvConfig(ABC):
     # Orientation representation
     orientation_representation: OrientationRepresentation = OrientationRepresentation.EULER
 
+    use_relative_actions: bool = True
+
     # Safety limits
     min_x: None | float = None
     min_y: None | float = None
@@ -182,6 +184,8 @@ class ManipulatorEnvConfig(ABC):
             "gripper_threshold": self.gripper_threshold,
             "cartesian_control_param_config": str(self.cartesian_control_param_config),
             "joint_control_param_config": str(self.joint_control_param_config),
+            "orientation_representation": str(self.orientation_representation),
+            "use_relative_actions": self.use_relative_actions,
         }
 
     @classmethod

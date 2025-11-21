@@ -548,9 +548,6 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
 
         self.ctrl_type = ControlType.CARTESIAN
 
-        # TODO: Make this configurable
-        self._min_z_height = 0.0425
-
         # Get rotation dimension for this environment
         rot_dim = self.get_rotation_dimension()
         target_dim = 3 + rot_dim  # 3 for position + rotation dimension
@@ -624,13 +621,17 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         assert action.shape == self.action_space.shape, (
             f"Action shape {action.shape} does not match expected shape {self.action_space.shape}"
         )
-        translation = action[:3]
-        rotation = self.action_to_rotation(action[3:-1])
+        if self.config.use_relative_actions:
+            translation = action[:3]
+            rotation = self.action_to_rotation(action[3:-1])
 
-        target_position = self.clip_position_for_safety(
-            self.robot.target_pose.position + translation
-        )
-        target_orientation = rotation * self.robot.target_pose.orientation
+            target_position = self.clip_position_for_safety(
+                self.robot.target_pose.position + translation
+            )
+            target_orientation = rotation * self.robot.target_pose.orientation
+        else:
+            target_position = self.clip_position_for_safety(action[:3])
+            target_orientation = self.action_to_rotation(action[3:-1])
 
         target_pose = Pose(position=target_position, orientation=target_orientation)
         self.robot.set_target(pose=target_pose)

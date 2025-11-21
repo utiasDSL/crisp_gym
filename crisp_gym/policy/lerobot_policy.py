@@ -29,6 +29,7 @@ class LerobotPolicy(Policy):
     environment to generate actions based on observations. It is intended for direct use in
     CRISP-based manipulation environments.
     """
+
     def __init__(
         self,
         pretrained_path: str,
@@ -118,6 +119,14 @@ def inference_worker(
     setup_logging()
     logger = logging.getLogger(__name__)
 
+    try:
+        from lerobot.utils.import_utils import register_third_party_plugins
+
+        register_third_party_plugins()
+    except ImportError:
+        logger.warning(
+            "[Inference] Could not import third-party plugins for LeRobot. Continuing without them."
+        )
     logger.info("[Inference] Starting inference worker...")
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -221,11 +230,7 @@ def _check_dataset_metadata(
         keys_to_skip (list[str] | None): List of metadata keys to skip during comparison.
     """
     if keys_to_skip is None:
-        keys_to_skip = [
-            "crisp_gym_version",
-            "crisp_py_version",
-            "control_type",
-        ]
+        keys_to_skip = []
 
     def _warn_if_not_equal(key: str, env_val: Any, policy_val: Any):
         if env_val != policy_val:
@@ -266,7 +271,8 @@ def _check_dataset_metadata(
                             subvalue,
                         )
                 else:
-                    _warn_if_missing(key)
+                    if key not in env_metadata:
+                        _warn_if_missing(key)
                     _warn_if_not_equal(key, env_metadata.get(key), value)
 
     except Exception as e:
