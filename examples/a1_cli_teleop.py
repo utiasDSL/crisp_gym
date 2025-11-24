@@ -4,15 +4,17 @@ import sys
 import time
 import cv2
 import numpy as np
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env_config
+from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env, make_env_config
 from crisp_gym.util.rl_utils import custom_reset, load_actions_safe
 
-config = make_env_config("my_env")
+# config = make_env_config("my_env_v2")
 
 max_step_velocity = 0.005
 max_gripper_step = 0.05
 
-env = ManipulatorCartesianEnv(config=config)
+# env = ManipulatorCartesianEnv(config=config, namespace="left")
+env = make_env("my_env_v2", namespace="left")
+
 print("Env created")
 env.wait_until_ready()
 print("Env ready.")
@@ -98,8 +100,19 @@ try:
             time.sleep(1)
             all_actions.clear()
             continue
-        if inp[0] == "i":
+        if inp == "img":
             cv2.imwrite("temp.png", cv2.cvtColor(obs["observation.images.wrist_camera"], cv2.COLOR_RGB2BGR))
+        if inp == "dep":
+                depth_m = obs["observation.images.wrist_depth_camera"]  # in m
+                max_depth_m = 0.3  # 30 cm
+                depth_8u = np.clip(depth_m, 0, max_depth_m)  # Clip to max depth
+                depth_8u = (depth_8u / max_depth_m * 255).astype(np.uint8)
+
+                # 2. Colorize
+                colored = cv2.applyColorMap(depth_8u, cv2.COLORMAP_PLASMA)
+
+                # 3. Save image
+                cv2.imwrite("temp_depth.png", colored)
         else:
             for c in inp:
                 if c == "f":
