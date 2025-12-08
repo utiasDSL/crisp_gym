@@ -252,13 +252,10 @@ class ManipulatorBaseEnv(gym.Env):
         obs["task"] = ""
 
         # Get cartesian pose with configured orientation representation
-        cartesian_pose = np.concatenate(
-            (
-                self.robot.end_effector_pose.position,
-                self.rotation_to_representation(self.robot.end_effector_pose.orientation),
-            ),
-            axis=0,
+        cartesian_pose = self.robot.end_effector_pose.to_array(
+            representation=self.config.orientation_representation
         )
+
         gripper_value = (
             1 - np.array([self.gripper.value])
             if self.config.gripper_mode != GripperMode.NONE
@@ -471,26 +468,6 @@ class ManipulatorBaseEnv(gym.Env):
                 f"Unsupported orientation representation: {self.config.orientation_representation}"
             )
 
-    def rotation_to_representation(self, rotation: Rotation) -> np.ndarray:
-        """Convert a Rotation object to the configured orientation representation.
-
-        Args:
-            rotation (Rotation): A scipy Rotation object to convert.
-
-        Returns:
-            np.ndarray: The rotation in the configured representation.
-        """
-        if self.config.orientation_representation == OrientationRepresentation.EULER:
-            return rotation.as_euler("xyz")
-        elif self.config.orientation_representation == OrientationRepresentation.QUATERNION:
-            return rotation.as_quat()
-        elif self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS:
-            return rotation.as_rotvec()
-        else:
-            raise ValueError(
-                f"Unsupported orientation representation: {self.config.orientation_representation}"
-            )
-
     def action_to_rotation(self, rot_action: np.ndarray) -> Rotation:
         """Convert the rotation part of the action to a Rotation object.
 
@@ -597,13 +574,9 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         obs = super()._get_obs()
         # Get target pose with configured orientation representation
         if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
-            obs[ObservationKeys.TARGET_OBS] = np.concatenate(
-                (
-                    self.robot.target_pose.position,
-                    self.rotation_to_representation(self.robot.target_pose.orientation),
-                ),
-                axis=0,
-            )
+            obs[ObservationKeys.TARGET_OBS] = self.robot.target_pose.to_array(
+                representation=self.config.orientation_representation
+            ).astype(np.float32)
         return obs
 
     @override
