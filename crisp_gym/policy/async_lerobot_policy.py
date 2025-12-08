@@ -33,8 +33,8 @@ class AsyncLerobotPolicy(Policy):
         self.env = env
         # ToDo: make these parameters not hardcoded
         self.n_obs = 2
-        self.n_act = 4
-        self.replan_time = 2
+        self.n_act = 5
+        self.replan_time = 3
         self.inpainting = False
 
         self.inf_proc = Process(
