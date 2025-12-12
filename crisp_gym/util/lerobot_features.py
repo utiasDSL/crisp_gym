@@ -45,11 +45,13 @@ def get_features(
             "Feature generation for LeRobot has been implemented for version 2.x of LeRobotDataset. Expect unexpected behaviour for other versions."
         )
 
+    # FIX: The dimensions do not consider orientation representation (e.g., quaternion vs euler)
     ctrl_dims: dict[ControlType, list[str]] = {
         ControlType.JOINT: [f"joint_{idx}" for idx in range(env.config.robot_config.num_joints())]
         + ["gripper"],
         ControlType.CARTESIAN: ["x", "y", "z", "roll", "pitch", "yaw", "gripper"],
     }
+    target_displacement_dims = ["dx", "dy", "dz", "drx", "dry", "drz", "gripper_displacement"]
 
     if env.ctrl_type not in ctrl_dims:
         raise ValueError(
@@ -85,6 +87,8 @@ def get_features(
                 ]  # Exclude gripper from cartesian state
             elif "gripper" in feature_key:
                 names = ["gripper"]
+            elif "target_displacement" in feature_key:
+                names = target_displacement_dims
             elif "target" in feature_key:
                 names = ["target_" + dim for dim in ctrl_dims[env.ctrl_type][:-1]]
             else:
