@@ -171,6 +171,9 @@ class ManipulatorBaseEnv(gym.Env):
         Args:
             previous_rotation_vector (NDArray): Previous rotation vector.
             cartesian_pose (NDArray): Current cartesian pose [x, y, z, rot_x, rot_y, rot_z].
+
+        Returns:
+            NDArray: The (potentially flipped) cartesian pose.
         """
         if previous_rotation_vector is not None:
             rotation_vector = cartesian_pose[3:]
