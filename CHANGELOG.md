@@ -1,5 +1,12 @@
 # Changelog
 
+## [4.1.1](https://github.com/utiasDSL/crisp_gym/compare/v4.1.0...v4.1.1) (2025-12-08)
+
+
+### Bug Fixes
+
+* buggy rotation_to_representation function ([a8d892f](https://github.com/utiasDSL/crisp_gym/commit/a8d892f014519928c9fd81aa67d00e1b4368aa2f))
+
 ## [4.1.0](https://github.com/utiasDSL/crisp_gym/compare/v4.0.0...v4.1.0) (2025-11-21)
 
 
