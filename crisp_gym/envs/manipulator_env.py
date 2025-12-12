@@ -177,8 +177,6 @@ class ManipulatorBaseEnv(gym.Env):
         """
         if previous_rotation_vector is not None:
             rotation_vector = cartesian_pose[3:]
-            # if _point_in_opposite_direction(previous_rotation_vector, rotation_vector):
-            #     cartesian_pose[3:] = -rotation_vector
             if np.dot(previous_rotation_vector, rotation_vector) < 0:
                 cartesian_pose[3:] = -rotation_vector
         else:
