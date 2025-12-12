@@ -85,7 +85,7 @@ with Progress() as progress:
             progress.update(progress_task, advance=1)
             new_dataset.save_episode()
 
-        new_dataset.add_frame(new_frame, task="Pick the lego block")
+        new_dataset.add_frame(new_frame, task=frame.get("task", ""))
 
     new_dataset.save_episode()
     progress.update(progress_task, advance=1)
