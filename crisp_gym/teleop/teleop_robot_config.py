@@ -40,6 +40,7 @@ class TeleopRobotConfig(ABC):
 
     use_gripper: bool = True
     disable_gripper_torque: bool = True
+    use_force_feedback: bool = False
 
     @classmethod
     def from_yaml(cls, yaml_path: Path, **overrides) -> "TeleopRobotConfig":  # noqa: ANN003

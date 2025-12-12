@@ -48,10 +48,15 @@ class TeleopRobot:
         if home:
             self.robot.home(blocking=blocking)
 
-        self.robot.cartesian_controller_parameters_client.load_param_config(
-            file_path=self.config.gravity_compensation_controller
-        )
-        self.robot.controller_switcher_client.switch_controller("cartesian_impedance_controller")
+        if self.config.use_force_feedback:
+            self.robot.controller_switcher_client.switch_controller("torque_feedback_controller")
+        else:
+            self.robot.cartesian_controller_parameters_client.load_param_config(
+                file_path=self.config.gravity_compensation_controller
+            )
+            self.robot.controller_switcher_client.switch_controller(
+                "cartesian_impedance_controller"
+            )
 
         if self.gripper is not None and not self.config.disable_gripper_torque:
             self.gripper.disable_torque()
