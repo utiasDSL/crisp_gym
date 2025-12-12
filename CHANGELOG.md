@@ -1,5 +1,18 @@
 # Changelog
 
+## [4.2.0](https://github.com/utiasDSL/crisp_gym/compare/v4.1.1...v4.2.0) (2025-12-12)
+
+
+### Features
+
+* Fix rotations + helper scripts for dataset conversions + task included in environment ([4e63b98](https://github.com/utiasDSL/crisp_gym/commit/4e63b98cc282542e617b8310749c1c716bba78f3))
+* proper orientation for angle vector representation ([40566df](https://github.com/utiasDSL/crisp_gym/commit/40566dfca2eedbf43a7ce4b7ca742ab7b10bda3c))
+
+
+### Bug Fixes
+
+* wrong config ([553af9c](https://github.com/utiasDSL/crisp_gym/commit/553af9c1e1132ac898c4d1913f27eea74f521fcb))
+
 ## [4.1.1](https://github.com/utiasDSL/crisp_gym/compare/v4.1.0...v4.1.1) (2025-12-08)
 
 
