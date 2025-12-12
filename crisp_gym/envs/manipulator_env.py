@@ -5,6 +5,7 @@ To use an environment, you can use the `make_env` function to create an instance
 Example:
 ```python
 from crisp_gym.envs import make_env
+:wa
 
 env = make_env(
     env_type="manipulator_cartesian",
@@ -150,7 +151,6 @@ class ManipulatorBaseEnv(gym.Env):
             }
         )
         self._previous_rotation_vector: NDArray | None = None
-        self._previous_target_rotation_vector: NDArray | None = None
         self._uninitialized = True
 
     def _should_check_proper_orientation_representation(self) -> bool:
@@ -590,6 +590,17 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                     ),
                 },
             )
+        if ObservationKeys.TARGET_DISPLACEMENT_OBS in self.config.observations_to_include_to_state:
+            self.observation_space: gym.spaces.Dict = gym.spaces.Dict(
+                {
+                    **self.observation_space.spaces,
+                    ObservationKeys.TARGET_DISPLACEMENT_OBS: gym.spaces.Box(
+                        low=-np.ones((target_dim + 1,), dtype=np.float32),  # +1 for gripper
+                        high=np.ones((target_dim + 1,), dtype=np.float32),
+                        dtype=np.float32,
+                    ),
+                },
+            )
 
         # Create action space with appropriate rotation dimension
         rot_low = -np.ones((rot_dim,), dtype=np.float32) * np.pi
@@ -619,10 +630,19 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
             dtype=np.float32,
         )
 
+        self._previous_target_rotation_vector: NDArray | None = None
+        self._previous_target_displacement_rotation_vector: NDArray | None = None
+
     @override
     def _get_obs(self) -> dict:
         obs = super()._get_obs()
-        # Get target pose with configured orientation representation
+        if (
+            ObservationKeys.TARGET_DISPLACEMENT_OBS
+            not in self.config.observations_to_include_to_state
+            and ObservationKeys.TARGET_OBS not in self.config.observations_to_include_to_state
+        ):
+            return obs
+
         if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
             target_pose_array = self.robot.target_pose.to_array(
                 representation=self.config.orientation_representation
@@ -633,6 +653,25 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
                 )
                 self._previous_target_rotation_vector = target_pose_array[3:]
             obs[ObservationKeys.TARGET_OBS] = target_pose_array.astype(np.float32)
+
+        if ObservationKeys.TARGET_DISPLACEMENT_OBS in self.config.observations_to_include_to_state:
+            delta_pose = self.robot.target_pose - self.robot.end_effector_pose
+            delta_pose_array = delta_pose.to_array(
+                representation=self.config.orientation_representation
+            )
+            if self._should_check_proper_orientation_representation():
+                delta_pose_array = self._flip_rotation_vector_if_needed(
+                    self._previous_target_displacement_rotation_vector, delta_pose_array
+                )
+                self._previous_target_displacement_rotation_vector = delta_pose_array[3:]
+            gripper_value = (
+                self.gripper.target - self.gripper.value if self.gripper is not None else 0.0
+            )
+            obs[ObservationKeys.TARGET_DISPLACEMENT_OBS] = np.concatenate(
+                [delta_pose_array, np.array([gripper_value], dtype=np.float32)],
+                axis=0,
+            ).astype(np.float32)
+
         return obs
 
     @override

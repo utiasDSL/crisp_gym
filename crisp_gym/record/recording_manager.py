@@ -304,6 +304,10 @@ class RecordingManager(ABC):
                 time.sleep(sleep_time)
                 continue
 
+            logger.debug(
+                f"Data function returned obs keys: action: {action} for task: {obs['task']}"
+            )
+
             self.queue.put({"type": "FRAME", "data": (obs, action, task)})
 
             sleep_time = 1 / self.config.fps - (time.time() - frame_start)
@@ -507,7 +511,7 @@ class KeyboardRecordingManager(RecordingManager):
                     self.state = "exit"
                 if key.char == "s":
                     self.state = "to_be_saved"
-                if key.char == "d":
+                if key.char == "x":
                     self.state = "to_be_deleted"
         except AttributeError:
             pass

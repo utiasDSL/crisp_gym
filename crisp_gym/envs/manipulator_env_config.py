@@ -28,6 +28,7 @@ class ObservationKeys:
     CARTESIAN_OBS = STATE_OBS + ".cartesian"
     TARGET_OBS = STATE_OBS + ".target"
     SENSOR_OBS = STATE_OBS + ".sensors"
+    TARGET_DISPLACEMENT_OBS = STATE_OBS + ".target_displacement"
 
     IMAGE_OBS = "observation.images"
 
@@ -38,6 +39,7 @@ ALLOWED_STATE_OBS_KEYS = {
     ObservationKeys.CARTESIAN_OBS,
     ObservationKeys.TARGET_OBS,
     ObservationKeys.SENSOR_OBS,
+    ObservationKeys.TARGET_DISPLACEMENT_OBS,
 }
 
 
