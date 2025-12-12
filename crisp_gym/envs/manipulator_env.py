@@ -62,12 +62,18 @@ class ManipulatorBaseEnv(gym.Env):
     It cannot be used directly.
     """
 
-    def __init__(self, config: ManipulatorEnvConfig, namespace: str = ""):
+    def __init__(
+        self,
+        config: ManipulatorEnvConfig,
+        namespace: str = "",
+        task: str = "Finish the task.",
+    ):
         """Initialize the Manipulator Gym Environment.
 
         Args:
             namespace (str): ROS2 namespace for the robot.
             config (ManipulatorEnvConfig): Configuration for the environment.
+            task (str): Description of the task for the environment.
         """
         super().__init__()
         self.config = config
@@ -100,6 +106,7 @@ class ManipulatorBaseEnv(gym.Env):
         for sensor in self.sensors:
             logger.debug(f"Sensor topic: {sensor.config.data_topic}")
 
+        self.task = task
         self.timestep = 0
         self.ctrl_type = ControlType.UNDEFINED
 
@@ -142,7 +149,41 @@ class ManipulatorBaseEnv(gym.Env):
                 },
             }
         )
+        self._previous_rotation_vector: NDArray | None = None
+        self._previous_target_rotation_vector: NDArray | None = None
         self._uninitialized = True
+
+    def _should_check_proper_orientation_representation(self) -> bool:
+        """Check if the orientation representation requires proper handling.
+
+        Returns:
+            bool: True if the orientation representation is Angle-Axis, False otherwise.
+        """
+        return self.config.orientation_representation == OrientationRepresentation.ANGLE_AXIS
+
+    def _flip_rotation_vector_if_needed(
+        self,
+        previous_rotation_vector: NDArray | None,
+        cartesian_pose: NDArray,
+    ) -> NDArray:
+        """Flip rotation vector if needed for proper representation.
+
+        Args:
+            previous_rotation_vector (NDArray): Previous rotation vector.
+            cartesian_pose (NDArray): Current cartesian pose [x, y, z, rot_x, rot_y, rot_z].
+        """
+        if previous_rotation_vector is not None:
+            rotation_vector = cartesian_pose[3:]
+            # if _point_in_opposite_direction(previous_rotation_vector, rotation_vector):
+            #     cartesian_pose[3:] = -rotation_vector
+            if np.dot(previous_rotation_vector, rotation_vector) < 0:
+                cartesian_pose[3:] = -rotation_vector
+        else:
+            # Make sure that the first element is positive for consistency
+            rotation_vector = cartesian_pose[3:]
+            if rotation_vector[0] < 0:
+                cartesian_pose[3:] = -rotation_vector
+        return cartesian_pose
 
     def get_state_observation_spaces(self, cartesian_dim: int) -> dict:
         """Get the state observation spaces.
@@ -248,13 +289,18 @@ class ManipulatorBaseEnv(gym.Env):
         """
         obs = {}
 
-        # TODO: Task description
-        obs["task"] = ""
+        obs["task"] = self.task
 
         # Get cartesian pose with configured orientation representation
         cartesian_pose = self.robot.end_effector_pose.to_array(
             representation=self.config.orientation_representation
         )
+
+        if self._should_check_proper_orientation_representation():
+            cartesian_pose = self._flip_rotation_vector_if_needed(
+                self._previous_rotation_vector, cartesian_pose
+            )
+            self._previous_rotation_vector = cartesian_pose[3:]
 
         gripper_value = (
             1 - np.array([self.gripper.value])
@@ -359,6 +405,9 @@ class ManipulatorBaseEnv(gym.Env):
 
         for sensor in self.sensors:
             sensor.reset()
+
+        self._previous_rotation_vector = None
+        self._previous_target_rotation_vector = None
 
         return self._get_obs(), {}
 
@@ -574,9 +623,15 @@ class ManipulatorCartesianEnv(ManipulatorBaseEnv):
         obs = super()._get_obs()
         # Get target pose with configured orientation representation
         if ObservationKeys.TARGET_OBS in self.config.observations_to_include_to_state:
-            obs[ObservationKeys.TARGET_OBS] = self.robot.target_pose.to_array(
+            target_pose_array = self.robot.target_pose.to_array(
                 representation=self.config.orientation_representation
-            ).astype(np.float32)
+            )
+            if self._should_check_proper_orientation_representation():
+                target_pose_array = self._flip_rotation_vector_if_needed(
+                    self._previous_target_rotation_vector, target_pose_array
+                )
+                self._previous_target_rotation_vector = target_pose_array[3:]
+            obs[ObservationKeys.TARGET_OBS] = target_pose_array.astype(np.float32)
         return obs
 
     @override
