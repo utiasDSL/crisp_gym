@@ -99,8 +99,6 @@ with Progress() as progress:
     for frame in dataset:
         new_frame = {}
 
-        if current_episode_index == 3:
-            break
 
         for key in features.keys():
             if key == "action":
