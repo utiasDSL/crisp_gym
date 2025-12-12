@@ -56,7 +56,6 @@ def _flip_rotation_vector_if_needed(
     Returns:
         Fixed rotation vector
     """
-
     if previous_rotation_vector is not None:
         if _point_in_opposite_direction(previous_rotation_vector, rotation_vector):
             rotation_vector = -rotation_vector
@@ -73,7 +72,7 @@ dataset = LeRobotDataset(repo_id=SOURCE_DATASET)
 
 print(f"Source dataset: {SOURCE_DATASET}")
 print(f"Total episodes: {dataset.meta.total_episodes}")
-print(f"\nDataset features:")
+print("\nDataset features:")
 for key in dataset.features.keys():
     if key.startswith("observation."):
         print(f"  {key}: {dataset.features[key]}")

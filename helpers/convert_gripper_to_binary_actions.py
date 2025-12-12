@@ -68,7 +68,7 @@ with Progress() as progress:
                 gripper_state = frame["observation.state.gripper"]
 
                 # Extract gripper state value (handle both scalar and array)
-                if hasattr(gripper_state, 'shape') and gripper_state.shape:
+                if hasattr(gripper_state, "shape") and gripper_state.shape:
                     gripper_value = gripper_state.item()
                 else:
                     gripper_value = float(gripper_state)
