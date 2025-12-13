@@ -9,15 +9,12 @@ from rich import print
 from rich.progress import Progress
 
 # Configuration
-SOURCE_DATASET = "LSY-lab/drawer_v1"
+SOURCE_DATASET = "LSY-lab/stack_v2"
 FEATURES_TO_REMOVE = [
-    "observation.state.joints",
-    "observation.state.target",
-    "observation.state.sensors_ft_sensor",
     "observation.state.sensors_tactile_sensor",
     "observation.images.tactile",
 ]
-WHAT_HAS_BEEN_REMOVED = "ft_tact_target"
+WHAT_HAS_BEEN_REMOVED = "tact"
 
 # Load source dataset
 dataset = LeRobotDataset(repo_id=SOURCE_DATASET)
@@ -98,7 +95,6 @@ with Progress() as progress:
 
     for frame in dataset:
         new_frame = {}
-
 
         for key in features.keys():
             if key == "action":
