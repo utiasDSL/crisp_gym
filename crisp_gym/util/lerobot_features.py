@@ -11,7 +11,7 @@ import gymnasium
 import numpy as np
 import rich
 
-from crisp_gym.manipulator_env import ManipulatorBaseEnv, make_env
+from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv, make_env
 from crisp_gym.util.control_type import ControlType
 
 try:
@@ -67,13 +67,11 @@ def get_features(
     state_feature_length = 0
     state_feature_names = []
 
-    # TODO: unify with crisp_gym observation keys
     for feature_key in env.observation_space.keys():
         if ignore_keys and feature_key in ignore_keys:
             continue
 
         if feature_key.startswith("observation.state"):
-            # Proprioceptive state features
             feature_shape = env.observation_space[feature_key].shape
             if feature_shape is None:
                 raise ValueError(f"Feature shape for {feature_key} should not be None!")

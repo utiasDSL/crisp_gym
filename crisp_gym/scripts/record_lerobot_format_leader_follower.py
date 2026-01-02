@@ -9,9 +9,8 @@ import rclpy
 
 import crisp_gym  # noqa: F401
 from crisp_gym.config.home import HomeConfig
-from crisp_gym.config.path import CRISP_CONFIG_PATH
-from crisp_gym.manipulator_env import ManipulatorCartesianEnv, make_env
-from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.envs.manipulator_env import ManipulatorCartesianEnv, make_env
+from crisp_gym.envs.manipulator_env_config import list_env_configs
 from crisp_gym.record.record_functions import make_teleop_fn, make_teleop_streamer_fn
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.teleop.teleop_robot import TeleopRobot, make_leader
@@ -78,13 +77,13 @@ def main():
         "--leader-config",
         type=str,
         default=None,
-        help="Configuration name for the leader robot. Define your own configuration in `crisp_gym/teleop/teleop_robot_config.py`.",
+        help="Configuration name for the leader robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
         "--follower-config",
         type=str,
         default=None,
-        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
+        help="Configuration name for the follower robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
     )
     parser.add_argument(
         "--follower-namespace",
@@ -131,7 +130,7 @@ def main():
 
     logger.info("Arguments:")
     for arg, value in vars(args).items():
-        logger.info(f"  {arg}: {value}")
+        logger.info(f"{arg:<30}: {value}")
 
     # Validate arguments not passed by the user
     if args.follower_namespace is None:
@@ -174,8 +173,6 @@ def main():
             control_type=ctrl_type,
             namespace=args.follower_namespace,
         )
-        env.config.robot_config.home_config = HomeConfig.CLOSE_TO_TABLE.value
-        env.config.robot_config.time_to_home = 2.0
 
         leader: TeleopRobot | TeleopStreamedPose | None = None
         if args.use_streamed_teleop:
@@ -184,12 +181,9 @@ def main():
         else:
             leader = make_leader(args.leader_config, namespace=args.leader_namespace)
             leader.wait_until_ready()
-            leader.config.leader.home_config = HomeConfig.CLOSE_TO_TABLE.value
-            leader.config.leader.time_to_home = 2.0
             logger.info("Using teleop robot for the leader robot. Leader is ready.")
 
         keys_to_ignore = []
-        # keys_to_ignore += ["observation.state.joint", "observation.state.target"]
         features = get_features(env=env, ignore_keys=keys_to_ignore)
         logger.debug(f"Using the features: {features}")
 
@@ -237,19 +231,19 @@ def main():
             env.robot.reset_targets()
             env.reset()
 
-            # TODO: @danielsanjosepro: ask user for which controller to use.
             if isinstance(leader, TeleopRobot):
-                try:
-                    leader.robot.controller_switcher_client.switch_controller(
-                        "torque_feedback_controller"
-                    )
-                except Exception:
-                    leader.robot.cartesian_controller_parameters_client.load_param_config(
-                        CRISP_CONFIG_PATH / "control" / "gravity_compensation_on_plane.yaml"
-                    )
-                    leader.robot.controller_switcher_client.switch_controller(
-                        "cartesian_impedance_controller"
-                    )
+                # TODO: @danielsanjosepro: allow user to change controllers based on config
+
+                leader.robot.reset_targets()
+                leader.robot.cartesian_controller_parameters_client.load_param_config(
+                    leader.config.gravity_compensation_controller
+                )
+                leader.robot.controller_switcher_client.switch_controller(
+                    "cartesian_impedance_controller"
+                )
+
+                if leader.gripper is not None:
+                    leader.gripper.disable_torque()
 
         def on_end():
             """Hook function to be called when stopping the recording."""
@@ -258,7 +252,9 @@ def main():
             env.robot.home(blocking=False, home_config=random_home)
             if isinstance(leader, TeleopRobot):
                 leader.robot.reset_targets()
-                leader.robot.home(blocking=False, home_config=random_home)
+                # Activate incase leader should go to the same position as the follower
+                # leader.robot.home(blocking=False, home_config=random_home)
+                leader.robot.home(blocking=False)
             env.gripper.open()
 
         with recording_manager:

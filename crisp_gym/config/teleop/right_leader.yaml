@@ -1,0 +1,28 @@
+leader:
+  robot_type: "franka"
+  publish_frequency: 50.0
+  time_to_home: 2.0
+  home_config:
+    - -1.73960110e-02
+    - 9.55319758e-02
+    - 8.09703053e-04
+    - -1.94272034
+    - -4.01435784e-03
+    - 2.06584183
+    - 7.97426445e-01
+
+leader_gripper:
+  joint_state_topic: /right/gripper/gripper_state_broadcaster/joint_states
+  # from_yaml: gripper_right.yaml
+  max_value: -0.07976700087890626
+  min_value: -1.2977477450683594
+  # min_value: 1046.0
+  # max_value: 2065.0
+  # joint_state_topic: /right/gripper/dynamixel_motor/joint_states
+  # command_topic: /right/gripper/dynamixel_motor/command
+  # enable_torque_service: /right/gripper/dynamixel_motor/set_torque
+
+leader_namespace: right
+leader_gripper_namespace: right/gripper
+
+gravity_compensation_controller: control/gravity_compensation.yaml

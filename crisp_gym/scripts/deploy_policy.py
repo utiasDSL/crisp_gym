@@ -3,15 +3,14 @@
 import argparse
 import datetime
 import logging
-import time
-from multiprocessing import Pipe, Process
+from pathlib import Path
 
 import crisp_gym  # noqa: F401
-from crisp_gym.config.home import home_close_to_table
-from crisp_gym.manipulator_env import make_env
-from crisp_gym.manipulator_env_config import list_env_configs
+from crisp_gym.envs.manipulator_env import make_env
+from crisp_gym.envs.manipulator_env_config import list_env_configs
+from crisp_gym.policy import make_policy
+from crisp_gym.policy.policy import list_policy_configs
 from crisp_gym.record.evaluate import Evaluator
-from crisp_gym.record.record_functions import inference_worker, make_policy_fn
 from crisp_gym.record.recording_manager import make_recording_manager
 from crisp_gym.util import prompt
 from crisp_gym.util.lerobot_features import get_features
@@ -26,7 +25,7 @@ def main():
     parser.add_argument(
         "--repo-id",
         type=str,
-        default="test",
+        default=None,
         help="Repository ID for the dataset",
     )
     parser.add_argument(
@@ -56,7 +55,7 @@ def main():
     parser.add_argument(
         "--push-to-hub",
         action=argparse.BooleanOptionalAction,
-        default=True,
+        default=False,
         help="Whether to push the dataset to the Hugging Face Hub.",
     )
     parser.add_argument(
@@ -87,7 +86,13 @@ def main():
         "--env-config",
         type=str,
         default=None,
-        help="Configuration name for the follower robot. Define your own configuration in `crisp_gym/manipulator_env_config.py`.",
+        help="Configuration name for the follower robot. You can define your own configurations, please check https://utiasdsl.github.io/crisp_controllers/misc/create_own_config/.",
+    )
+    parser.add_argument(
+        "--policy-config",
+        type=str,
+        default=None,
+        help="Path to a custom policy configuration file (YAML). If not provided, the default configuration for the selected policy will be used.",
     )
     parser.add_argument(
         "--env-namespace",
@@ -109,12 +114,17 @@ def main():
     logger.info("-" * 40)
     logger.info("Arguments:")
     for arg, value in vars(args).items():
-        logger.info(f"  {arg}: {value}")
+        logger.info(f"  {arg:<30}: {value}")
     logger.info("-" * 40)
+
+    if args.repo_id is None:
+        args.repo_id = prompt.prompt(
+            "Please enter the repository ID for the dataset (e.g., 'username/dataset_name'):",
+        )
+        logger.info(f"Using repository ID: {args.repo_id}")
 
     if args.path is None:
         logger.info(" No path provided. Searching for models in 'outputs/train' directory.")
-        from pathlib import Path
 
         # We check recursively in the 'outputs/train' directory for 'pretrained_model's recursively
         models_path = Path("outputs/train")
@@ -151,6 +161,14 @@ def main():
         )
         logger.info(f"Using follower configuration: {args.env_config}")
 
+    if args.policy_config is None:
+        policy_configs = list_policy_configs()
+        args.policy_config = prompt.prompt(
+            "Please select the policy configuration to use.",
+            options=policy_configs,
+            default=policy_configs[0],
+        )
+
     if args.evaluate:
         logger.info("Evaluation mode enabled. Will evaluate the performance after each episode.")
         datetime_now = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -164,13 +182,10 @@ def main():
     else:
         evaluation_file = "evaluation_results.csv"
 
-    inf_proc = None
+    policy = None
     try:
         ctrl_type = "cartesian" if not args.joint_control else "joint"
         env = make_env(args.env_config, control_type=ctrl_type, namespace=args.env_namespace)
-        # TODO: Remove this hack!
-        env.config.robot_config.home_config = home_close_to_table
-        env.config.robot_config.time_to_home = 2.0
 
         # %% Prepare the dataset
         features = get_features(env)
@@ -189,22 +204,12 @@ def main():
         recording_manager.wait_until_ready()
 
         # %% Set up multiprocessing for policy inference
-        logger.info("Setting up multiprocessing for policy inference.")
-        parent_conn, child_conn = Pipe()
-
-        # Start inference process
-        inf_proc = Process(
-            target=inference_worker,
-            kwargs={
-                "conn": child_conn,
-                "pretrained_path": args.path,
-                "env": env,
-            },
-            daemon=True,
+        logger.info("Setting up the policy.")
+        policy = make_policy(
+            name_or_config_name=args.policy_config,
+            pretrained_path=args.path,
+            env=env,
         )
-        inf_proc.start()
-
-        time.sleep(5.0)  # Give some time for the process to start
 
         logger.info("Homing robot before starting with recording.")
 
@@ -214,7 +219,7 @@ def main():
         def on_start():
             """Hook function to be called when starting a new episode."""
             env.reset()
-            parent_conn.send("reset")
+            policy.reset()
             evaluator.start_timer()
 
         def on_end():
@@ -224,7 +229,6 @@ def main():
             env.gripper.open()
 
             logger.info("Waiting for user to decide on success/failure if evaluating...")
-            time.sleep(3.0)
             if recording_manager.state != "exit":
                 evaluator.evaluate(episode=recording_manager.episode_count)
 
@@ -236,7 +240,7 @@ def main():
                     )
 
                     recording_manager.record_episode(
-                        data_fn=make_policy_fn(env, parent_conn),
+                        data_fn=policy.make_data_fn(),
                         task="Pick up the lego block.",
                         on_start=on_start,
                         on_end=on_end,
@@ -246,8 +250,7 @@ def main():
 
         # Shutdown inference process
         logger.info("Shutting down inference process.")
-        parent_conn.send(None)
-        inf_proc.join()
+        policy.shutdown()
 
         logger.info("Homing robot.")
         env.home()
@@ -258,9 +261,8 @@ def main():
         logger.info("Finished recording.")
     except Exception as e:
         logger.exception(e)
-        if inf_proc is not None and inf_proc.is_alive():
-            logger.info("Shutting down inference process due to exception.")
-            inf_proc.join()
+        if policy is not None:
+            policy.shutdown()
 
 
 if __name__ == "__main__":

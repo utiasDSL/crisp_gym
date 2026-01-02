@@ -13,7 +13,10 @@ import numpy as np
 import rclpy
 
 # TODO: make this optional, we do not want to depend on lerobot
-from lerobot.constants import HF_LEROBOT_HOME
+try:
+    from lerobot.utils.constants import HF_LEROBOT_HOME
+except ImportError:
+    from lerobot.constants import HF_LEROBOT_HOME
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from pynput import keyboard
 from rclpy.executors import SingleThreadedExecutor
@@ -23,6 +26,7 @@ from std_msgs.msg import String
 from typing_extensions import override
 
 from crisp_gym.config.path import find_config
+from crisp_gym.policy.policy import Action, Observation
 from crisp_gym.record.recording_manager_config import RecordingManagerConfig
 from crisp_gym.util.lerobot_features import concatenate_state_features
 
@@ -217,18 +221,8 @@ class RecordingManager(ABC):
                             )
 
                     logger.info("Saving current episode to dataset.")
-                    # Check if there are frames in the current episode buffer
-                    if hasattr(dataset, "_episode_buffer") and len(dataset._episode_buffer) == 0:
-                        logger.warning("Episode buffer is empty. No frames to save.")
-                    else:
-                        logger.info(
-                            f"Saving episode with {len(getattr(dataset, '_episode_buffer', []))} frames."
-                        )
 
                     dataset.save_episode()
-                    logger.info(
-                        f"Episode {self.episode_count} saved to dataset.",
-                    )
 
                 elif mtype == "DELETE_EPISODE":
                     if self.config.use_sound:
@@ -273,7 +267,7 @@ class RecordingManager(ABC):
 
     def record_episode(
         self,
-        data_fn: Callable[[], tuple[dict, dict]],
+        data_fn: Callable[[], tuple[Observation, Action]],
         task: str,
         on_start: Callable[[], None] | None = None,
         on_end: Callable[[], None] | None = None,

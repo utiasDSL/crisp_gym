@@ -17,7 +17,7 @@ import numpy as np
 import rclpy
 from numpy.typing import NDArray
 
-from crisp_gym.manipulator_env import ManipulatorBaseEnv
+from crisp_gym.envs.manipulator_env import ManipulatorBaseEnv
 
 
 def stack_gym_space(space: gym.Space, repeat: int) -> gym.Space:
