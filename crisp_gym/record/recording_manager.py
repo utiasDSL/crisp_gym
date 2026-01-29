@@ -79,7 +79,7 @@ class RecordingManager(ABC):
             target=self._writer_proc,
             args=(),
             name="dataset_writer",
-            daemon=False,
+            daemon=_ADD_FRAME_HAS_TASK,  # For old lerobot versions < v3.0
         )
         self.writer.start()
 
