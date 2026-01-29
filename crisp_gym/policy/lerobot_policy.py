@@ -18,15 +18,6 @@ from crisp_gym.policy.policy import Action, Observation, Policy, register_policy
 from crisp_gym.util.lerobot_features import concatenate_state_features, numpy_obs_to_torch
 from crisp_gym.util.setup_logger import setup_logging
 
-try:
-    from lerobot.policies.factory import make_pre_post_processors
-    USE_LEROBOT_PROCESSORS = True
-    logging.info("Found lerobot pre/post processor support.")
-except ImportError:
-    USE_LEROBOT_PROCESSORS = False
-    logging.warning("No lerobot pre/post processor support found.")
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -173,14 +164,9 @@ def inference_worker(
         policy.reset()
         policy.to(device).eval()
 
-        if USE_LEROBOT_PROCESSORS:
-            preprocessor, postprocessor = make_pre_post_processors(policy_cfg=policy.config, pretrained_path=pretrained_path)
-
         warmup_obs_raw = env.observation_space.sample()
         warmup_obs_raw["observation.state"] = concatenate_state_features(warmup_obs_raw)
         warmup_obs = numpy_obs_to_torch(warmup_obs_raw)
-        if USE_LEROBOT_PROCESSORS:
-            warmup_obs = preprocessor(warmup_obs)
 
         logger.info("[Inference] Warming up policy...")
         elapsed_list = []
@@ -214,18 +200,11 @@ def inference_worker(
             if obs_raw == "reset":
                 logger.info("[Inference] Resetting policy")
                 policy.reset()
-                if USE_LEROBOT_PROCESSORS:
-                    preprocessor.reset()
-                    postprocessor.reset()
                 continue
 
             with torch.inference_mode():
                 obs = numpy_obs_to_torch(obs_raw)
-                if USE_LEROBOT_PROCESSORS:
-                    obs = preprocessor(obs)
                 action = policy.select_action(obs)
-                if USE_LEROBOT_PROCESSORS:
-                    action = postprocessor(action)
 
             logger.debug(f"[Inference] Computed action: {action}")
             conn.send(action)

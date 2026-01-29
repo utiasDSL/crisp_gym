@@ -6,7 +6,6 @@ import subprocess
 import threading
 import time
 from abc import ABC, abstractmethod
-from inspect import signature
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -32,8 +31,6 @@ from crisp_gym.record.recording_manager_config import RecordingManagerConfig
 from crisp_gym.util.lerobot_features import concatenate_state_features
 
 logger = logging.getLogger(__name__)
-
-_ADD_FRAME_HAS_TASK = "task" in signature(LeRobotDataset.add_frame).parameters
 
 
 class RecordingManager(ABC):
@@ -79,7 +76,7 @@ class RecordingManager(ABC):
             target=self._writer_proc,
             args=(),
             name="dataset_writer",
-            daemon=False,
+            daemon=True,
         )
         self.writer.start()
 
@@ -205,11 +202,7 @@ class RecordingManager(ABC):
                     )
 
                     logger.debug(f"Constructed frame with keys: {frame.keys()}")
-                    if _ADD_FRAME_HAS_TASK: # For old lerobot versions < v3.0
-                        dataset.add_frame(frame, task=task)
-                    else: # For lerobot versions >= v3.0
-                        frame["task"] = task
-                        dataset.add_frame(frame)
+                    dataset.add_frame(frame, task=task)
 
                 elif mtype == "SAVE_EPISODE":
                     if self.config.use_sound:
